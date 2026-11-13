@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14532D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ponto">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Ponto Equipe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --bg:#F4F1EA;--card:#FFFFFF;--ink:#1B1A17;--muted:#6B675E;--line:#E4DFD3;
+  --brand:#14532D;--brand-ink:#FFFFFF;--brand-soft:#E3EFE6;
+  --pos:#15803D;--neg:#B91C1C;--warn:#B45309;--warn-soft:#FDF0DC;--info-soft:#E6EEF8;--info:#1D4E89;
+  --radius:18px;--shadow:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#121311;--card:#1C1D1A;--ink:#F1EFE9;--muted:#A3A097;--line:#2D2E2A;--brand:#4ADE80;--brand-ink:#0B1A10;--brand-soft:#1D2E22;--pos:#4ADE80;--neg:#F87171;--warn:#FBBF24;--warn-soft:#2E2614;--info-soft:#16233A;--info:#93C5FD;--shadow:none}
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Manrope,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
+a{color:var(--brand);font-weight:700}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:620px;margin:0 auto;padding:14px 16px calc(96px + env(safe-area-inset-bottom))}
+.screen{display:none}.screen.on{display:block}
+header.top{display:flex;align-items:center;justify-content:space-between;padding:4px 2px 12px;gap:10px}
+.logo{font-weight:800;font-size:20px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.logo .dot{width:10px;height:10px;border-radius:50%;background:var(--brand)}
+.pill{font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:12px;line-height:1.4}
+.banner.info{background:var(--info-soft);color:var(--info)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.hero{text-align:center;padding:22px 16px 18px}
+.hero .date{color:var(--muted);font-weight:700;font-size:14px}
+.hero .clock{font-size:58px;font-weight:800;letter-spacing:-.03em;line-height:1.05;margin:6px 0 16px}
+.hero .clock small{font-size:22px;color:var(--muted);font-weight:700;letter-spacing:0}
+.btn-punch{width:100%;border:0;border-radius:16px;background:var(--brand);color:var(--brand-ink);font:inherit;font-weight:800;font-size:19px;padding:18px;cursor:pointer;transition:transform .08s}
+.btn-punch:active{transform:scale(.98)}.btn-punch:disabled{opacity:.6}
+.btn-punch .sub{display:block;font-size:12px;font-weight:600;opacity:.85;margin-top:3px}
+.gps{font-size:12px;color:var(--muted);font-weight:700;margin-top:10px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 10px}
+.stat .k{font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.stat .v{font-size:20px;font-weight:800;margin-top:4px}
+.pos{color:var(--pos)}.neg{color:var(--neg)}
+h2{font-size:15px;margin:0 0 10px;font-weight:800}
+h3{font-size:14px;margin:14px 0 8px;font-weight:800}
+.row-between{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.timeline{list-style:none;margin:0;padding:0}
+.timeline li{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed var(--line);gap:10px}
+.timeline li:last-child{border-bottom:0}
+.timeline .lbl{color:var(--muted);font-weight:700;font-size:14px}
+.timeline .loc{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
+.timeline .t{font-weight:800;font-size:18px}
+.tag{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;background:var(--warn-soft);color:var(--warn);margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.03em}
+.tag.type{background:var(--brand-soft);color:var(--brand)}
+.tag.info{background:var(--info-soft);color:var(--info)}
+.tag.neg{background:rgba(185,28,28,.1);color:var(--neg)}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:12px 0}
+.link{background:none;border:0;color:var(--brand);font:inherit;font-weight:800;font-size:14px;cursor:pointer;padding:6px 0}
+.btn{display:inline-block;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:700;font-size:15px;border-radius:12px;padding:12px 14px;cursor:pointer;text-align:center;text-decoration:none}
+.btn.primary{background:var(--brand);color:var(--brand-ink);border-color:transparent}
+.btn.danger{color:var(--neg)}
+.btn.sm{padding:8px 12px;font-size:13.5px}
+.btn:disabled{opacity:.5}
+.btn-row{display:flex;gap:8px}.btn-row>*{flex:1}
+.full{width:100%}
+.month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.month-nav .m{font-weight:800;font-size:17px;text-transform:capitalize}
+.icon-btn{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:20px;font-weight:800;cursor:pointer}
+.icon-btn:disabled{opacity:.35}
+.list{list-style:none;margin:0;padding:0}
+.day{display:grid;grid-template-columns:46px 1fr auto;gap:10px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.day:last-child,.li:last-child{border-bottom:0}
+.day .d{text-align:center;line-height:1.1}
+.day .d b{display:block;font-size:19px;font-weight:800}
+.day .d span{font-size:10.5px;color:var(--muted);font-weight:800;text-transform:uppercase}
+.day .p{font-size:14px;font-weight:700;word-spacing:5px}
+.day .p.muted{color:var(--muted);font-weight:600;word-spacing:0}
+.day .r{text-align:right;font-size:13px;font-weight:800;min-width:52px}
+.day .r .w{font-size:15px}
+.day.off{opacity:.6}
+.day.today .d b{color:var(--brand)}
+.li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.li .main{font-weight:800;font-size:15px}
+.li .sub{font-size:12.5px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.4}
+.li .side{text-align:right;font-size:13px;font-weight:800;white-space:nowrap}
+.dotst{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--line);vertical-align:middle}
+.dotst.on{background:var(--pos)}.dotst.pause{background:var(--warn)}.dotst.out{background:var(--muted)}
+label.f{display:block;font-size:11.5px;font-weight:800;color:var(--muted);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+input,select,textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:11px 12px;min-height:46px}
+textarea{min-height:68px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.wk{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.wk .it{display:flex;align-items:center;gap:8px}
+.wk .it span{width:34px;font-size:13px;font-weight:800;color:var(--muted)}
+.seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;font:inherit;font-weight:800;font-size:14px;padding:9px;border-radius:9px;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.note{font-size:12.5px;color:var(--muted);line-height:1.5}
+.big{font-size:22px;font-weight:800}
+.chk{display:flex;gap:10px;align-items:center;margin-top:12px;font-size:14px;font-weight:700}
+.chk input{width:20px;height:20px;min-height:0;flex:none}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 8px calc(6px + env(safe-area-inset-bottom));z-index:10}
+nav.tabs .in{display:flex;max-width:620px;width:100%}
+nav.tabs button{flex:1;border:0;background:none;font:inherit;font-size:11px;font-weight:800;color:var(--muted);padding:6px 0;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative}
+nav.tabs svg{width:22px;height:22px}
+nav.tabs button.on{color:var(--brand)}
+nav.tabs .badge{position:absolute;top:2px;left:calc(50% + 6px);background:var(--neg);color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;font-weight:800}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:none;align-items:flex-end;justify-content:center}
+.overlay.show{display:flex}
+.overlay.center{align-items:center;z-index:25}
+.sheet{background:var(--card);width:100%;max-width:620px;border-radius:22px 22px 0 0;padding:14px 16px calc(18px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+.dialog{background:var(--card);border-radius:20px;padding:20px;margin:0 16px;max-width:420px;width:100%}
+.req{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:8px}
+.req .h{font-weight:800;font-size:14.5px}
+.req .m{font-size:13px;color:var(--muted);margin-top:4px;line-height:1.45}
+details{margin-top:12px}summary{font-size:13px;font-weight:800;color:var(--muted);cursor:pointer}
+details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);line-height:1.5}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(16px);background:var(--ink);color:var(--bg);padding:12px 16px;border-radius:14px;font-weight:700;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:30;width:max-content;max-width:92vw;line-height:1.4}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.view{display:none}.view.on{display:block}
+.auth{max-width:420px;margin:8vh auto 0}
+.auth .logo{justify-content:center;font-size:26px;margin-bottom:6px}
+.auth .tagline{text-align:center;color:var(--muted);font-weight:600;margin-bottom:18px}
+.cred{font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:14px;white-space:pre-wrap;word-break:break-all;margin-top:10px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- CARREGANDO -->
+<div class="screen on" id="scr-boot"><div class="wrap"><div class="auth"><div class="logo"><span class="dot"></span>Ponto Equipe</div><div class="tagline"><span class="spin"></span>Carregando…</div></div></div></div>
+
+<!-- LOGIN -->
+<div class="screen" id="scr-login"><div class="wrap"><div class="auth">
+  <div class="logo"><span class="dot"></span>Ponto Equipe</div>
+  <div class="tagline">Registro de ponto com localização</div>
+  <div class="banner info" id="login-setup-hint" hidden>Primeiro acesso do sistema: crie a conta do gestor abaixo.</div>
+  <form class="card" id="f-login">
+    <h2>Entrar</h2>
+    <label class="f" for="l-email">E-mail</label><input id="l-email" type="email" autocomplete="username" required>
+    <label class="f" for="l-pass">Senha</label><input id="l-pass" type="password" autocomplete="current-password" required>
+    <button class="btn primary full" style="margin-top:16px" type="submit" id="l-go">Entrar</button>
+    <div class="note" style="margin-top:10px">Não tem acesso ou esqueceu a senha? Fale com seu gestor — ele cria a conta e redefine a senha.</div>
+  </form>
+  <form class="card" id="f-setup" hidden>
+    <h2>Configuração inicial — conta do gestor</h2>
+    <div class="note">Só aparece enquanto não existe nenhum gestor. Depois disso, novas contas são criadas pelo gestor dentro do app.</div>
+    <label class="f" for="s-nome">Nome</label><input id="s-nome" required autocomplete="name">
+    <label class="f" for="s-email">E-mail</label><input id="s-email" type="email" required autocomplete="username">
+    <label class="f" for="s-mat">Matrícula (opcional)</label><input id="s-mat">
+    <label class="f" for="s-pass">Senha (mín. 8 caracteres)</label><input id="s-pass" type="password" minlength="8" required autocomplete="new-password">
+    <button class="btn primary full" style="margin-top:16px" type="submit" id="s-go">Criar conta de gestor</button>
+  </form>
+</div></div></div>
+
+<!-- TROCA DE SENHA OBRIGATÓRIA -->
+<div class="screen" id="scr-pw"><div class="wrap"><div class="auth">
+  <div class="logo"><span class="dot"></span>Ponto Equipe</div>
+  <form class="card" id="f-pw">
+    <h2>Crie sua senha</h2>
+    <div class="note">Você entrou com uma senha temporária. Defina uma senha pessoal para continuar.</div>
+    <label class="f" for="pw1">Nova senha (mín. 8 caracteres)</label><input id="pw1" type="password" minlength="8" required autocomplete="new-password">
+    <label class="f" for="pw2">Repita a senha</label><input id="pw2" type="password" minlength="8" required autocomplete="new-password">
+    <button class="btn primary full" style="margin-top:16px" type="submit">Salvar senha</button>
+    <button class="link" type="button" data-logout style="margin-top:8px">Sair</button>
+  </form>
+</div></div></div>
+
+<!-- APP -->
+<div class="screen" id="scr-app">
+<div class="wrap">
+  <header class="top">
+    <div class="logo"><span class="dot"></span>Ponto</div>
+    <span class="pill" id="pill"></span>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+
+  <!-- HOJE -->
+  <section class="view" id="v-hoje">
+    <div class="card hero">
+      <div class="date" id="h-date"></div>
+      <div class="clock num" id="h-clock">--:--</div>
+      <button class="btn-punch" id="btn-punch">Registrar entrada<span class="sub">&nbsp;</span></button>
+      <div class="gps" id="h-gps"></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="h-worked">0:00</div></div>
+      <div class="stat"><div class="k">Jornada</div><div class="v num" id="h-exp">0:00</div></div>
+      <div class="stat"><div class="k">Saldo hoje</div><div class="v num" id="h-saldo">—</div></div>
+    </div>
+    <div class="card">
+      <div class="row-between"><h2 style="margin:0">Marcações de hoje</h2><button class="link" id="h-edit">Detalhes / ajuste</button></div>
+      <ul class="timeline" id="h-list"></ul>
+    </div>
+    <div class="card">
+      <h2>Banco de horas</h2>
+      <div class="grid2">
+        <div><div class="note">Saldo do mês</div><div class="big num" id="h-month">0:00</div></div>
+        <div><div class="note">Acumulado desde <span id="h-since"></span></div><div class="big num" id="h-acc">0:00</div></div>
+      </div>
+      <div class="banner" id="h-pending" style="margin:12px 0 0" hidden></div>
+    </div>
+  </section>
+
+  <!-- HISTÓRICO -->
+  <section class="view" id="v-hist">
+    <div class="card" id="hist-who-card" hidden>
+      <label class="f" for="hist-who" style="margin-top:0">Colaborador</label>
+      <select id="hist-who"></select>
+    </div>
+    <div class="month-nav">
+      <button class="icon-btn" id="m-prev" aria-label="Mês anterior">‹</button>
+      <div class="m" id="m-label"></div>
+      <button class="icon-btn" id="m-next" aria-label="Próximo mês">›</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="s-worked">0:00</div></div>
+      <div class="stat"><div class="k">Previsto</div><div class="v num" id="s-exp">0:00</div></div>
+      <div class="stat"><div class="k">Saldo</div><div class="v num" id="s-saldo">0:00</div></div>
+    </div>
+    <div class="card" style="padding:4px 12px"><ul class="list" id="m-days"></ul></div>
+    <div class="card">
+      <h2>Lançar ou corrigir outro dia</h2>
+      <div class="note" id="pick-note">Esqueceu de marcar? Abra o dia e envie uma solicitação de ajuste ao gestor.</div>
+      <div style="display:flex;gap:8px;margin-top:10px"><input type="date" id="pick-date"><button class="btn primary" id="pick-go">Abrir</button></div>
+    </div>
+    <div class="card" id="my-reqs-card">
+      <h2>Minhas solicitações</h2>
+      <div id="my-reqs"></div>
+    </div>
+  </section>
+
+  <!-- EQUIPE (gestor) -->
+  <section class="view" id="v-equipe">
+    <div class="stats">
+      <div class="stat"><div class="k">Trabalhando</div><div class="v num pos" id="t-on">0</div></div>
+      <div class="stat"><div class="k">Encerraram</div><div class="v num" id="t-out">0</div></div>
+      <div class="stat"><div class="k">Sem marcação</div><div class="v num" id="t-none">0</div></div>
+    </div>
+    <div class="card" style="padding:4px 14px">
+      <div class="row-between" style="padding-top:10px"><h2 style="margin:0">Hoje, <span id="t-date"></span></h2><button class="link" id="t-reload">Atualizar</button></div>
+      <ul class="list" id="t-list"></ul>
+    </div>
+  </section>
+
+  <!-- APROVAÇÕES (gestor) -->
+  <section class="view" id="v-aprov">
+    <div class="row-between" style="margin-bottom:10px"><h2 style="margin:0">Solicitações pendentes</h2><button class="link" id="a-reload">Atualizar</button></div>
+    <div id="a-list"></div>
+  </section>
+
+  <!-- RELATÓRIO -->
+  <section class="view" id="v-rel">
+    <div class="card">
+      <h2>Relatório</h2>
+      <div id="r-who-box" hidden><label class="f" for="r-who" style="margin-top:0">Colaborador</label><select id="r-who"></select></div>
+      <label class="f">Período</label>
+      <div class="seg" id="r-mode"><button data-m="month" class="on">Mês</button><button data-m="range">Intervalo</button></div>
+      <div id="r-month-box"><label class="f" for="r-month">Mês</label><input type="month" id="r-month"></div>
+      <div id="r-range-box" hidden><div class="grid2"><div><label class="f" for="r-from">De</label><input type="date" id="r-from"></div><div><label class="f" for="r-to">Até</label><input type="date" id="r-to"></div></div></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="r-worked">—</div></div>
+      <div class="stat"><div class="k">Previsto</div><div class="v num" id="r-exp">—</div></div>
+      <div class="stat"><div class="k">Saldo</div><div class="v num" id="r-saldo">—</div></div>
+    </div>
+    <div class="card">
+      <div class="note" id="r-info">Calculando…</div>
+      <div class="btn-row" style="margin-top:12px"><button class="btn primary" id="r-xlsx">Baixar Excel</button><button class="btn primary" id="r-pdf">Baixar PDF</button></div>
+      <label class="chk"><input type="checkbox" id="r-sign" checked> Incluir campos de assinatura no PDF</label>
+    </div>
+  </section>
+
+  <!-- MAIS / ADMIN (gestor) -->
+  <section class="view" id="v-admin">
+    <div class="btn-row" style="margin-bottom:12px"><button class="btn" data-go="relatorio">Relatórios</button><button class="btn" data-go="conta">Minha conta</button></div>
+    <div class="card">
+      <div class="row-between"><h2 style="margin:0">Usuários</h2><button class="btn sm primary" id="u-new">+ Nova conta</button></div>
+      <ul class="list" id="u-list" style="margin-top:6px"></ul>
+    </div>
+    <div class="card">
+      <h2>Locais de trabalho</h2>
+      <div class="note">Cadastre escritório, minas e bases. Cada marcação mostra o local mais próximo dentro do raio; fora deles aparece “Fora dos locais”.</div>
+      <ul class="list" id="loc-list" style="margin-top:6px"></ul>
+      <h3>Adicionar local</h3>
+      <label class="f" for="loc-nome" style="margin-top:0">Nome</label><input id="loc-nome" placeholder="Ex.: Mina Carajás – S11D">
+      <div class="grid3">
+        <div><label class="f" for="loc-lat">Latitude</label><input id="loc-lat" inputmode="decimal" placeholder="-6.0123"></div>
+        <div><label class="f" for="loc-lng">Longitude</label><input id="loc-lng" inputmode="decimal" placeholder="-50.1234"></div>
+        <div><label class="f" for="loc-raio">Raio (m)</label><input id="loc-raio" type="number" inputmode="numeric" value="500"></div>
+      </div>
+      <div class="btn-row" style="margin-top:10px"><button class="btn" id="loc-here">Usar minha posição</button><button class="btn primary" id="loc-add">Adicionar</button></div>
+    </div>
+    <div class="card">
+      <h2>Configurações gerais</h2>
+      <label class="f" for="cfg-emp" style="margin-top:0">Empresa (aparece nos relatórios)</label><input id="cfg-emp">
+      <label class="f" for="cfg-tol">Tolerância diária (min)</label><input id="cfg-tol" type="number" min="0" max="120" inputmode="numeric">
+      <label class="chk"><input type="checkbox" id="cfg-fer"> Considerar feriados nacionais automaticamente</label>
+      <label class="chk"><input type="checkbox" id="cfg-gps"> Exigir localização para registrar o ponto</label>
+      <div class="note" style="margin-top:8px">Feriados estaduais/municipais e pontos facultativos: ajuste o “tipo do dia” na pessoa. Diferenças de até a tolerância no dia não entram no saldo (CLT art. 58 §1º prevê até 10 min).</div>
+      <button class="btn primary full" style="margin-top:12px" id="cfg-save">Salvar configurações</button>
+    </div>
+  </section>
+
+  <!-- CONTA -->
+  <section class="view" id="v-conta">
+    <div class="card">
+      <h2 id="c-nome"></h2>
+      <div class="note" id="c-info"></div>
+    </div>
+    <form class="card" id="f-pw2">
+      <h2>Trocar senha</h2>
+      <label class="f" for="cp1" style="margin-top:0">Nova senha (mín. 8 caracteres)</label><input id="cp1" type="password" minlength="8" required autocomplete="new-password">
+      <label class="f" for="cp2">Repita a senha</label><input id="cp2" type="password" minlength="8" required autocomplete="new-password">
+      <button class="btn primary full" style="margin-top:12px" type="submit">Salvar nova senha</button>
+    </form>
+    <div class="card">
+      <h2>Instalar no celular</h2>
+      <div class="note"><b>iPhone (Safari):</b> toque em Compartilhar → “Adicionar à Tela de Início”.<br><b>Android (Chrome):</b> menu ⋮ → “Adicionar à tela inicial” ou “Instalar app”.<br>Na primeira marcação, permita o acesso à localização.</div>
+    </div>
+    <button class="btn danger full" data-logout>Sair</button>
+  </section>
+</div>
+<nav class="tabs"><div class="in" id="tabs"></div></nav>
+</div>
+
+<div class="overlay" id="ov-sheet"><div class="sheet" id="sheet"></div></div>
+<div class="overlay center" id="ov-dlg"><div class="dialog" id="dlg"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js"></script>
+<script>
+(() => {
+'use strict';
+// ================= CONFIGURAÇÃO =================
+const SB_URL = 'https://wxqynubloybfmhozexpb.supabase.co';
+const SB_KEY = 'sb_publishable_iKfUWxhtrqwF2jmfiJ-WoQ_z61jnEt7';
+const XLSX_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+const JSPDF_URL = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+const AUTOTABLE_URL = 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js';
+
+const sb = window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true, storageKey:'ponto-equipe-auth'}});
+
+// ================= UTILIDADES =================
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const WD = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+const WDL = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+const MES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const TYPES = {normal:'Dia normal', feriado:'Feriado', folga:'Folga', ferias:'Férias', atestado:'Atestado / abono'};
+const FUSOS = {'America/Sao_Paulo':'Brasília (UTC−3)', 'America/Manaus':'AM, MT, MS, RO, RR (UTC−4)', 'America/Rio_Branco':'Acre (UTC−5)', 'America/Noronha':'Fernando de Noronha (UTC−2)'};
+const LABELS = ['Entrada','Saída intervalo','Retorno intervalo','Saída'];
+const ACOES = {incluir:'Incluir marcação', alterar:'Alterar horário', remover:'Remover marcação', tipo_dia:'Alterar tipo do dia'};
+const ERR = {
+  nao_autenticado:'Sessão expirada. Entre novamente.', usuario_inativo:'Seu usuário está inativo. Fale com o gestor.',
+  gps_obrigatorio:'A localização é obrigatória. Ative o GPS e permita o acesso à localização para este site.',
+  marcacao_duplicada:'duplicada', motivo_obrigatorio:'Informe o motivo (mínimo 3 caracteres).',
+  marcacao_nao_encontrada:'Marcação não encontrada (pode já ter sido alterada).', data_futura:'Não é possível lançar marcação em data futura.',
+  hora_futura:'O horário informado ainda não chegou.', hora_obrigatoria:'Informe o horário.', tipo_invalido:'Dados inválidos.',
+  data_invalida:'Data inválida.', solicitacao_invalida:'Esta solicitação já foi tratada.', solicitacao_repetida:'Você já tem uma solicitação igual aguardando aprovação.',
+  sem_permissao:'Sem permissão para esta ação.', ultimo_gestor:'É preciso manter pelo menos um gestor ativo.', dados_invalidos:'Dados inválidos.',
+  usuario_inexistente:'Usuário não encontrado.', coordenadas_invalidas:'Localização inválida.',
+  'Invalid login credentials':'E-mail ou senha incorretos.', 'Failed to fetch':'Sem conexão com o servidor. Verifique a internet.'
+};
+function errMsg(e){ const m = e?.message || e?.erro || String(e || 'Erro'); for (const k in ERR) if (m.includes(k)) return ERR[k]; return m; }
+
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const dateOf = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d, 12); };
+const todayKey = () => keyOf(new Date());
+const toMin = t => { const [h,m] = String(t).split(':').map(Number); return h*60 + m; };
+const minToT = m => `${pad(Math.floor(m/60))}:${pad(m%60)}`;
+const nowMin = () => { const n = new Date(); return n.getHours()*60 + n.getMinutes(); };
+const fmtDur = m => { m = Math.round(m); const s = m < 0 ? '-' : ''; m = Math.abs(m); return `${s}${Math.floor(m/60)}:${pad(m%60)}`; };
+const fmtSaldo = m => { m = Math.round(m); return m === 0 ? '0:00' : (m > 0 ? '+' : '-') + fmtDur(Math.abs(m)); };
+const cls = m => m > 0 ? 'pos' : m < 0 ? 'neg' : '';
+const fmtDate = k => { const d = dateOf(k); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; };
+const fmtDM = k => fmtDate(k).slice(0, 5);
+const fmtTs = iso => { try { return new Date(iso).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}); } catch (e) { return iso; } };
+const addDays = (k, n) => { const d = dateOf(k); d.setDate(d.getDate()+n); return keyOf(d); };
+const monthEnd = m => { const [y, mm] = m.split('-').map(Number); return keyOf(new Date(y, mm, 0)); };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const validT = t => /^\d{2}:\d{2}$/.test(t || '');
+const labelFor = i => i < 4 ? LABELS[i] : (i % 2 === 0 ? 'Entrada extra' : 'Saída extra');
+function eachDay(from, to, fn){ for (let k = from; k <= to; k = addDays(k, 1)) fn(k); }
+function monthsBetween(a, b){ const out = []; let [y, m] = a.slice(0, 7).split('-').map(Number); const end = b.slice(0, 7); for (;;){ const s = `${y}-${pad(m)}`; out.push(s); if (s >= end) break; m++; if (m > 12){ m = 1; y++; } } return out; }
+function hav(a, b, c, d){ const R = 6371000, r = x => x*Math.PI/180; const s = Math.sin(r(c-a)/2)**2 + Math.cos(r(a))*Math.cos(r(c))*Math.sin(r(d-b)/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
+function randomPass(){ const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const v = new Uint32Array(10); crypto.getRandomValues(v); return Array.from(v, x => a[x % a.length]).join(''); }
+
+// ================= FERIADOS =================
+const FIXOS = {'01-01':'Confraternização Universal','04-21':'Tiradentes','05-01':'Dia do Trabalho','09-07':'Independência','10-12':'N. Sra. Aparecida','11-02':'Finados','11-15':'Proclamação da República','11-20':'Consciência Negra','12-25':'Natal'};
+const pascoaC = {};
+function pascoa(y){
+  if (pascoaC[y]) return pascoaC[y];
+  const a = y%19, b = Math.floor(y/100), c = y%100, d = Math.floor(b/4), e = b%4, f = Math.floor((b+8)/25), g = Math.floor((b-f+1)/3);
+  const h = (19*a+b-d-g+15)%30, i = Math.floor(c/4), k = c%4, l = (32+2*e+2*i-h-k)%7, m = Math.floor((a+11*h+22*l)/451);
+  const mes = Math.floor((h+l-7*m+114)/31), dia = ((h+l-7*m+114)%31)+1;
+  return (pascoaC[y] = keyOf(new Date(y, mes-1, dia, 12)));
+}
+function holiday(k){
+  if (S.cfg && S.cfg.feriados_nac === false) return null;
+  if (FIXOS[k.slice(5)]) return FIXOS[k.slice(5)];
+  if (k === addDays(pascoa(Number(k.slice(0, 4))), -2)) return 'Sexta-feira Santa';
+  return null;
+}
+
+// ================= ESTADO =================
+const S = {
+  session:null, me:null, cfg:{tolerancia:10, feriados_nac:true, exigir_gps:false, empresa:''}, locais:[], team:[],
+  teamToday:{}, pending:[], myReqs:[], view:'hoje', month:null, target:null, rMode:'month', lastKey:null, gpsState:''
+};
+const C = {};
+const U = uid => C[uid] || (C[uid] = {months:new Set(), punches:{}, status:{}, reqs:{}, hist:{}});
+const isG = () => S.me?.role === 'gestor';
+const profOf = uid => (uid === S.me?.id ? S.me : S.team.find(p => p.id === uid)) || S.me;
+const nameOf = uid => profOf(uid)?.nome || '—';
+
+async function fetchAll(build){
+  let out = [], from = 0;
+  for (;;){
+    const {data, error} = await build().range(from, from + 999);
+    if (error) throw error;
+    out = out.concat(data || []);
+    if (!data || data.length < 1000) break;
+    from += 1000;
+  }
+  return out;
+}
+async function ensureRange(uid, fromK, toK){
+  const u = U(uid);
+  const months = monthsBetween(fromK, toK);
+  const missing = months.filter(m => !u.months.has(m));
+  if (!missing.length) return;
+  const span = monthsBetween(missing[0], missing[missing.length - 1]);
+  const a = span[0] + '-01', b = monthEnd(span[span.length - 1]);
+  const [ps, st, rq, hs] = await Promise.all([
+    fetchAll(() => sb.from('punches').select('*').eq('user_id', uid).eq('removido', false).gte('dia', a).lte('dia', b).order('dia').order('hora')),
+    fetchAll(() => sb.from('day_status').select('*').eq('user_id', uid).gte('dia', a).lte('dia', b)),
+    fetchAll(() => sb.from('requests').select('*').eq('user_id', uid).gte('dia', a).lte('dia', b).order('created_at')),
+    fetchAll(() => sb.from('historico').select('*').eq('user_id', uid).gte('dia', a).lte('dia', b).order('created_at')),
+  ]);
+  const inSpan = k => k >= a && k <= b;
+  for (const k of Object.keys(u.punches)) if (inSpan(k)) delete u.punches[k];
+  for (const k of Object.keys(u.status)) if (inSpan(k)) delete u.status[k];
+  for (const k of Object.keys(u.hist)) if (inSpan(k)) delete u.hist[k];
+  for (const id of Object.keys(u.reqs)) if (inSpan(u.reqs[id].dia)) delete u.reqs[id];
+  ps.forEach(p => { p.t = p.hora.slice(0, 5); (u.punches[p.dia] || (u.punches[p.dia] = [])).push(p); });
+  st.forEach(s => { u.status[s.dia] = s; });
+  rq.forEach(r => { u.reqs[r.id] = r; });
+  hs.forEach(h => { (u.hist[h.dia] || (u.hist[h.dia] = [])).push(h); });
+  span.forEach(m => u.months.add(m));
+}
+function invalidate(uid, k){ U(uid).months.delete(k.slice(0, 7)); }
+async function refreshDay(uid, k){ invalidate(uid, k); await ensureRange(uid, k, k); }
+
+// ================= CÁLCULOS =================
+const dayPunches = (uid, k) => (U(uid).punches[k] || []).slice().sort((a, b) => toMin(a.t) - toMin(b.t));
+function dayType(uid, k){ return U(uid).status[k]?.tipo || 'normal'; }
+function expectedFor(uid, k){
+  if (dayType(uid, k) !== 'normal') return 0;
+  if (holiday(k)) return 0;
+  return Number((profOf(uid)?.jornada || [])[dateOf(k).getDay()]) || 0;
+}
+function calc(uid, k, live){
+  const ps = dayPunches(uid, k), tk = todayKey();
+  let worked = 0;
+  for (let i = 0; i + 1 < ps.length; i += 2){ const a = toMin(ps[i].t); let b = toMin(ps[i+1].t); if (b < a) b += 1440; worked += b - a; }
+  const open = ps.length % 2 === 1;
+  let liveW = worked;
+  if (live && open && k === tk){ const a = toMin(ps[ps.length-1].t), n = nowMin(); if (n >= a) liveW += n - a; }
+  const exp = expectedFor(uid, k), ini = profOf(uid)?.inicio || tk;
+  let counts = k >= ini && k <= tk;
+  if (k === tk && (open || (ps.length === 0 && exp > 0))) counts = false;
+  let saldo = counts ? worked - exp : 0;
+  if (counts && Math.abs(saldo) <= (Number(S.cfg.tolerancia) || 0)) saldo = 0;
+  const st = U(uid).status[k];
+  return {ps, worked, live:liveW, exp, saldo, counts, open, type:st?.tipo || 'normal', obs:st?.obs || '',
+    edited:ps.some(p => p.origem !== 'app' || p.hora_original), noGps:ps.filter(p => p.origem === 'app' && p.lat == null).length};
+}
+function sumRange(uid, from, to){
+  const r = {w:0, e:0, s:0, odd:[], faltas:0}; const tk = todayKey();
+  if (!from || !to || from > to) return r;
+  eachDay(from, to, k => { const c = calc(uid, k); if (c.counts){ r.w += c.worked; r.e += c.exp; r.s += c.saldo; if (c.exp > 0 && !c.ps.length && c.type === 'normal') r.faltas++; } if (c.open && k < tk) r.odd.push(k); });
+  return r;
+}
+function localOf(p){
+  if (p.lat == null){
+    if (p.origem !== 'app') return 'Lançamento manual';
+    return p.geo_status === 'negado' ? 'GPS negado' : p.geo_status === 'timeout' ? 'GPS sem sinal' : 'Sem GPS';
+  }
+  let best = null;
+  for (const l of S.locais){ const d = hav(p.lat, p.lng, l.lat, l.lng); if (d <= l.raio_m && (!best || d < best.d)) best = {n:l.nome, d}; }
+  return best ? best.n : 'Fora dos locais';
+}
+const mapUrl = p => `https://www.google.com/maps?q=${p.lat},${p.lng}`;
+function reqText(r){
+  const h = t => t ? t.slice(0, 5) : '';
+  if (r.tipo === 'incluir') return `Incluir ${h(r.hora_nova)}`;
+  if (r.tipo === 'alterar') return `Alterar ${h(r.hora_atual)} → ${h(r.hora_nova)}`;
+  if (r.tipo === 'remover') return `Remover ${h(r.hora_atual)}`;
+  return `Tipo do dia: ${TYPES[r.tipo_dia] || r.tipo_dia}`;
+}
+const ST_TAG = {pendente:'<span class="tag">pendente</span>', aprovado:'<span class="tag type">aprovado</span>', rejeitado:'<span class="tag neg">rejeitado</span>', cancelado:'<span class="tag info">cancelado</span>'};
+
+// ================= UI GENÉRICA =================
+let toastT;
+function toast(msg, ms){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms || 3400); }
+function showBanner(m){ const b = $('banner'); b.textContent = m; b.hidden = !m; }
+function dialog(html, onClick){
+  return new Promise(res => {
+    $('dlg').innerHTML = html;
+    const ov = $('ov-dlg'); ov.classList.add('show');
+    const done = v => { ov.classList.remove('show'); ov.onclick = null; res(v); };
+    ov.onclick = e => {
+      if (e.target === ov) return done(null);
+      const b = e.target.closest('[data-r]'); if (!b) return;
+      if (onClick){ const v = onClick(b.dataset.r); if (v === undefined) return; done(v); } else done(b.dataset.r === '1');
+    };
+  });
+}
+const ask = (title, msg, ok = 'Confirmar') => dialog(`<h2>${esc(title)}</h2><p class="note" style="font-size:14px;margin:0">${esc(msg)}</p>
+  <div class="btn-row" style="margin-top:16px"><button class="btn" data-r="0">Cancelar</button><button class="btn primary" data-r="1">${esc(ok)}</button></div>`).then(v => !!v);
+const askText = (title, label, ok = 'Confirmar') => dialog(`<h2>${esc(title)}</h2><label class="f" for="dlg-t" style="margin-top:0">${esc(label)}</label><textarea id="dlg-t"></textarea>
+  <div class="btn-row" style="margin-top:16px"><button class="btn" data-r="0">Cancelar</button><button class="btn primary" data-r="1">${esc(ok)}</button></div>`,
+  r => r === '1' ? $('dlg-t').value.trim() : null);
+function showCred(title, text){
+  return dialog(`<h2>${esc(title)}</h2><div class="note">Envie estes dados ao colaborador (por exemplo, pelo WhatsApp). Na primeira entrada ele cria a própria senha.</div>
+    <div class="cred" id="cred-t">${esc(text)}</div>
+    <div class="btn-row" style="margin-top:14px"><button class="btn" data-r="c">Copiar</button><button class="btn primary" data-r="1">Pronto</button></div>`,
+    r => { if (r === 'c'){ navigator.clipboard?.writeText(text).then(() => toast('Copiado.'), () => toast('Não foi possível copiar; selecione o texto.')); return undefined; } return true; });
+}
+function screen(id){ document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); }
+function setBusyBtn(btn, on, label){ if (!btn) return; if (on){ btn.dataset.l = btn.innerHTML; btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${label || 'Aguarde…'}`; } else { btn.disabled = false; if (btn.dataset.l) btn.innerHTML = btn.dataset.l; } }
+
+// ================= AUTENTICAÇÃO =================
+async function callAdmin(body){
+  const {data:{session}} = await sb.auth.getSession();
+  const headers = {'Content-Type':'application/json', apikey:SB_KEY};
+  if (session?.access_token) headers.Authorization = 'Bearer ' + session.access_token;
+  const r = await fetch(`${SB_URL}/functions/v1/admin-usuarios`, {method:'POST', headers, body:JSON.stringify(body)});
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok || j.erro) throw new Error(j.erro || `Erro ${r.status}`);
+  return j;
+}
+async function showLogin(){
+  screen('scr-login');
+  try {
+    const {data, error} = await sb.rpc('existe_gestor');
+    const none = !error && data === false;
+    $('f-setup').hidden = !none; $('login-setup-hint').hidden = !none;
+  } catch (e) {}
+}
+async function startSession(session){
+  S.session = session;
+  const {data:me, error} = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+  if (error){ toast(errMsg(error)); await showLogin(); return; }
+  if (!me){ await sb.auth.signOut(); toast('Esta conta não está cadastrada na equipe. Fale com o gestor.', 6000); await showLogin(); return; }
+  if (!me.ativo){ await sb.auth.signOut(); toast('Seu usuário está inativo. Fale com o gestor.', 6000); await showLogin(); return; }
+  S.me = me;
+  if (me.trocar_senha){ screen('scr-pw'); return; }
+  await enterApp();
+}
+async function enterApp(){
+  screen('scr-app');
+  buildTabs();
+  $('pill').textContent = `${S.me.nome.split(' ')[0]} · ${isG() ? 'Gestor' : 'Colaborador'}`;
+  try {
+    const [cfg, loc] = await Promise.all([sb.from('config').select('*').eq('id', 1).maybeSingle(), sb.from('locais').select('*').order('nome')]);
+    if (cfg.data) S.cfg = cfg.data;
+    S.locais = loc.data || [];
+    if (isG()) await loadTeam();
+    await Promise.all([ensureRange(S.me.id, S.me.inicio < S.month + '-01' ? S.me.inicio : S.month + '-01', todayKey()), loadMyReqs(), isG() ? loadPending() : null]);
+  } catch (e){ showBanner('Não consegui carregar todos os dados: ' + errMsg(e)); }
+  route();
+}
+
+// ================= NAVEGAÇÃO =================
+const ICONS = {
+  hoje:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  historico:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+  equipe:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.6c2.6.2 4.3 2 5 5"/>',
+  aprovacoes:'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+  relatorio:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+  admin:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  conta:'<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.2-6 8-6s7 2 8 6"/>'
+};
+const VIEWS = {hoje:'v-hoje', historico:'v-hist', equipe:'v-equipe', aprovacoes:'v-aprov', relatorio:'v-rel', admin:'v-admin', conta:'v-conta'};
+const TITLES = {hoje:'Hoje', historico:'Histórico', equipe:'Equipe', aprovacoes:'Aprovações', relatorio:'Relatório', admin:'Mais', conta:'Conta'};
+function tabsFor(){ return isG() ? ['hoje','historico','equipe','aprovacoes','admin'] : ['hoje','historico','relatorio','conta']; }
+function buildTabs(){
+  $('tabs').innerHTML = tabsFor().map(v => `<button data-v="${v}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[v]}</svg>${TITLES[v]}${v === 'aprovacoes' ? '<span class="badge" id="badge" hidden></span>' : ''}</button>`).join('');
+}
+function go(v){ if (location.hash !== '#' + v) location.hash = v; else route(); }
+function route(){
+  if (!S.me || !$('scr-app').classList.contains('on')) return;
+  let h = (location.hash || '').slice(1);
+  const allowed = isG() ? Object.keys(VIEWS) : ['hoje','historico','relatorio','conta'];
+  if (!allowed.includes(h)) h = 'hoje';
+  S.view = h;
+  for (const [k, id] of Object.entries(VIEWS)) $(id).classList.toggle('on', k === h);
+  const tabV = (h === 'relatorio' || h === 'conta') && isG() ? 'admin' : h;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === tabV));
+  window.scrollTo(0, 0);
+  render();
+}
+function render(){
+  if (!S.me) return;
+  S.lastKey = todayKey();
+  renderToday();
+  if (S.view === 'historico') renderHist();
+  if (S.view === 'equipe') renderTeam();
+  if (S.view === 'aprovacoes') renderPending();
+  if (S.view === 'relatorio') renderReport();
+  if (S.view === 'admin') renderAdmin();
+  if (S.view === 'conta') renderConta();
+  const b = $('badge'); if (b){ b.hidden = !S.pending.length; b.textContent = S.pending.length; }
+}
+
+// ================= HOJE =================
+function renderTodayLive(){
+  const c = calc(S.me.id, todayKey(), true);
+  $('h-worked').textContent = fmtDur(c.live);
+  $('h-exp').textContent = fmtDur(c.exp);
+  const el = $('h-saldo');
+  if (!c.ps.length){ el.textContent = '—'; el.className = 'v num'; }
+  else { const s = c.live - c.exp; el.textContent = fmtSaldo(s); el.className = 'v num ' + cls(s); }
+}
+function renderToday(){
+  const uid = S.me.id, now = new Date(), tk = todayKey(), c = calc(uid, tk, true), n = c.ps.length;
+  $('h-date').textContent = `${WDL[now.getDay()]}, ${now.getDate()} de ${MES[now.getMonth()]}`;
+  if (!punching) $('btn-punch').innerHTML = `Registrar ${esc(labelFor(n).toLowerCase())}<span class="sub">${n ? 'Última marcação: ' + c.ps[n-1].t : 'Nenhuma marcação hoje'}</span>`;
+  $('h-gps').textContent = S.gpsState;
+  renderTodayLive();
+  const tName = c.type !== 'normal' ? TYPES[c.type] : holiday(tk) ? 'Feriado: ' + holiday(tk) : '';
+  const pend = Object.values(U(uid).reqs).filter(r => r.dia === tk && r.status === 'pendente').length;
+  $('h-list').innerHTML = (tName ? `<li><span class="lbl">Hoje</span><span class="tag type">${esc(tName)}</span></li>` : '') +
+    (n ? c.ps.map((p, i) => `<li><span><span class="lbl">${labelFor(i)}${p.hora_original || p.origem !== 'app' ? '<span class="tag">ajustado</span>' : ''}</span><span class="loc">${p.lat != null ? `<a href="${mapUrl(p)}" target="_blank" rel="noopener">${esc(localOf(p))}</a>` : esc(localOf(p))}</span></span><span class="t num">${p.t}</span></li>`).join('')
+       : '<li class="empty" style="justify-content:center">Nenhuma marcação ainda.</li>') +
+    (pend ? `<li><span class="lbl">Ajustes aguardando aprovação</span><span class="tag">${pend}</span></li>` : '');
+  const ini = S.me.inicio || tk, m0 = tk.slice(0, 8) + '01';
+  const m = sumRange(uid, m0 > ini ? m0 : ini, tk), acc = sumRange(uid, ini, tk);
+  $('h-month').textContent = fmtSaldo(m.s); $('h-month').className = 'big num ' + cls(m.s);
+  $('h-acc').textContent = fmtSaldo(acc.s); $('h-acc').className = 'big num ' + cls(acc.s);
+  $('h-since').textContent = fmtDate(ini);
+  const pe = $('h-pending');
+  if (acc.odd.length){ pe.hidden = false; pe.textContent = `Atenção: ${acc.odd.length} dia(s) com número ímpar de marcações (${acc.odd.slice(-5).map(fmtDM).join(', ')}). Abra o dia no Histórico e solicite o ajuste.`; }
+  else pe.hidden = true;
+}
+function getPos(){
+  return new Promise(res => {
+    if (!navigator.geolocation) return res({geo:'indisponivel'});
+    navigator.geolocation.getCurrentPosition(
+      p => res({lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy, geo:'ok'}),
+      e => res({geo: e.code === 1 ? 'negado' : e.code === 3 ? 'timeout' : 'indisponivel'}),
+      {enableHighAccuracy:true, timeout:15000, maximumAge:0});
+  });
+}
+let punching = false;
+async function punch(){
+  if (punching) return;
+  punching = true;
+  const btn = $('btn-punch'); btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Obtendo localização…<span class="sub">permita o acesso, se o celular pedir</span>';
+  try {
+    const pos = await getPos();
+    if (pos.geo !== 'ok'){
+      S.gpsState = pos.geo === 'negado' ? 'Localização bloqueada para este site — libere nas configurações do navegador.' : 'Não foi possível obter a localização.';
+      if (S.cfg.exigir_gps){ toast(ERR.gps_obrigatorio, 6000); return; }
+    } else S.gpsState = `Localização obtida (±${Math.round(pos.acc)} m)`;
+    btn.innerHTML = '<span class="spin"></span>Registrando…<span class="sub">&nbsp;</span>';
+    const args = {p_lat:pos.lat ?? null, p_lng:pos.lng ?? null, p_precisao:pos.acc ?? null, p_geo:pos.geo, p_forcar:false};
+    let {data, error} = await sb.rpc('registrar_ponto', args);
+    if (error && String(error.message).includes('marcacao_duplicada')){
+      punching = false; renderToday(); punching = true;
+      if (!(await ask('Marcar de novo?', 'Você registrou um ponto há menos de 2 minutos. Deseja registrar outra marcação agora?', 'Registrar'))) return;
+      ({data, error} = await sb.rpc('registrar_ponto', {...args, p_forcar:true}));
+    }
+    if (error){ toast(errMsg(error), 6000); return; }
+    const p = data; p.t = p.hora.slice(0, 5);
+    const u = U(S.me.id); (u.punches[p.dia] || (u.punches[p.dia] = [])).push(p);
+    if (isG() && p.dia === todayKey()) (S.teamToday[S.me.id] || (S.teamToday[S.me.id] = [])).push(p);
+    try { navigator.vibrate && navigator.vibrate(40); } catch (e) {}
+    toast(`Ponto registrado às ${p.t} · ${localOf(p)}`, 5000);
+  } catch (e){ toast(errMsg(e), 6000); }
+  finally { punching = false; btn.disabled = false; render(); }
+}
+
+// ================= HISTÓRICO =================
+function histUid(){ return isG() && S.target ? S.target : S.me.id; }
+async function renderHist(){
+  const uid = histUid(), tk = todayKey();
+  $('hist-who-card').hidden = !isG();
+  if (isG()){
+    const sel = $('hist-who');
+    sel.innerHTML = S.team.map(p => `<option value="${p.id}"${p.id === uid ? ' selected' : ''}>${esc(p.nome)}${p.ativo ? '' : ' (inativo)'}${p.id === S.me.id ? ' (você)' : ''}</option>`).join('');
+  }
+  $('pick-note').textContent = isG() ? 'Abra qualquer dia para incluir, corrigir ou remover marcações (aplicado na hora, com registro no histórico).' : 'Esqueceu de marcar? Abra o dia e envie uma solicitação de ajuste ao gestor.';
+  $('my-reqs-card').hidden = isG();
+  const [y, m] = S.month.split('-').map(Number);
+  $('m-label').textContent = `${MES[m-1]} ${y}`;
+  $('m-next').disabled = S.month >= tk.slice(0, 7);
+  const first = S.month + '-01', last = monthEnd(S.month);
+  const loaded = U(uid).months.has(S.month);
+  if (!loaded) $('m-days').innerHTML = '<li class="empty"><span class="spin"></span>Carregando…</li>';
+  try { await ensureRange(uid, first, last); } catch (e){ $('m-days').innerHTML = `<li class="empty">${esc(errMsg(e))}</li>`; return; }
+  if (histUid() !== uid || S.view !== 'historico') return;
+  const keys = []; eachDay(first, last, k => { if (k <= tk || U(uid).punches[k] || U(uid).status[k]) keys.push(k); });
+  keys.reverse();
+  const sm = sumRange(uid, first, last < tk ? last : tk);
+  $('s-worked').textContent = fmtDur(sm.w); $('s-exp').textContent = fmtDur(sm.e);
+  $('s-saldo').textContent = fmtSaldo(sm.s); $('s-saldo').className = 'v num ' + cls(sm.s);
+  const reqs = Object.values(U(uid).reqs);
+  $('m-days').innerHTML = keys.length ? keys.map(k => {
+    const c = calc(uid, k), d = dateOf(k), np = c.ps.length, hol = holiday(k);
+    const ptxt = np ? `<div class="p num">${c.ps.map(p => esc(p.t) + (p.hora_original || p.origem !== 'app' ? '*' : '')).join(' ')}</div>`
+      : `<div class="p muted">${c.type !== 'normal' ? esc(TYPES[c.type]) : hol ? 'Feriado: ' + esc(hol) : k === tk ? 'Sem marcações ainda' : c.exp ? (c.counts ? 'Falta / sem marcações' : 'Sem marcações') : 'Sem expediente'}</div>`;
+    const tags = [];
+    if (np && c.type !== 'normal') tags.push(`<span class="tag type">${esc(TYPES[c.type])}</span>`);
+    if (c.open && k < tk) tags.push('<span class="tag">ímpar</span>');
+    if (c.noGps) tags.push('<span class="tag info">sem GPS</span>');
+    const pend = reqs.filter(r => r.dia === k && r.status === 'pendente').length;
+    if (pend) tags.push(`<span class="tag">${pend} pendente${pend > 1 ? 's' : ''}</span>`);
+    return `<li class="day${c.exp === 0 && !np ? ' off' : ''}${k === tk ? ' today' : ''}" data-k="${k}">
+      <div class="d"><b class="num">${d.getDate()}</b><span>${WD[d.getDay()]}</span></div>
+      <div>${ptxt}${tags.length ? `<div style="margin-top:3px;margin-left:-6px">${tags.join('')}</div>` : ''}</div>
+      <div class="r"><div class="w num">${np ? fmtDur(c.worked) : ''}</div><div class="num ${cls(c.saldo)}">${c.counts && (c.exp || c.worked) ? fmtSaldo(c.saldo) : ''}</div></div></li>`;
+  }).join('') : '<li class="empty">Nenhum dia neste mês.</li>';
+  if (!isG()) renderMyReqs();
+}
+async function loadMyReqs(){
+  const {data} = await sb.from('requests').select('*').eq('user_id', S.me.id).order('created_at', {ascending:false}).limit(15);
+  S.myReqs = data || [];
+}
+function renderMyReqs(){
+  $('my-reqs').innerHTML = S.myReqs.length ? S.myReqs.map(r => `<div class="req" data-open="${r.dia}">
+    <div class="h">${fmtDate(r.dia)} · ${esc(reqText(r))} ${ST_TAG[r.status] || ''}</div>
+    <div class="m">Motivo: ${esc(r.motivo)}${r.resposta ? `<br>Resposta do gestor: ${esc(r.resposta)}` : ''}<br>Enviada em ${fmtTs(r.created_at)}</div></div>`).join('')
+    : '<div class="empty">Nenhuma solicitação enviada.</div>';
+}
+
+// ================= FOLHA DO DIA (detalhes + ajustes) =================
+let SH = null;
+async function openDay(uid, k){
+  SH = {uid, k};
+  $('sheet').innerHTML = '<div class="grab"></div><div class="empty"><span class="spin"></span>Carregando…</div>';
+  $('ov-sheet').classList.add('show');
+  try { await ensureRange(uid, k, k); } catch (e){ $('sheet').innerHTML = `<div class="grab"></div><div class="empty">${esc(errMsg(e))}</div>`; return; }
+  renderSheet();
+}
+function closeSheet(){ $('ov-sheet').classList.remove('show'); SH = null; }
+function renderSheet(){
+  if (!SH) return;
+  const {uid, k} = SH, d = dateOf(k), u = U(uid), ps = dayPunches(uid, k), c = calc(uid, k), G = isG(), hol = holiday(k);
+  const reqs = Object.values(u.reqs).filter(r => r.dia === k).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const hist = u.hist[k] || [];
+  const ini = profOf(uid)?.inicio;
+  const canAdj = G || uid === S.me.id;
+  $('sheet').innerHTML = `<div class="grab"></div>
+    <div class="row-between"><div><h2 style="margin:0;text-transform:capitalize">${WDL[d.getDay()]}, ${fmtDate(k)}</h2>${uid !== S.me.id ? `<div class="note">${esc(nameOf(uid))}</div>` : ''}</div><button class="link" data-act="close">Fechar</button></div>
+    ${ini && k < ini ? `<div class="banner" style="margin:10px 0 0">Data anterior ao início do controle (${fmtDate(ini)}): não entra no banco de horas.</div>` : ''}
+    <div class="note" style="margin-top:8px">${c.type !== 'normal' ? `<span class="tag type" style="margin-left:0">${esc(TYPES[c.type])}</span> ` : hol ? `<span class="tag type" style="margin-left:0">Feriado: ${esc(hol)}</span> ` : ''}${c.obs ? 'Obs.: ' + esc(c.obs) + ' · ' : ''}Trabalhado ${fmtDur(c.worked)} · Previsto ${fmtDur(c.exp)}${c.counts ? ` · Saldo <b class="${cls(c.saldo)}">${fmtSaldo(c.saldo)}</b>` : ''}</div>
+    <h3>Marcações</h3>
+    <ul class="timeline">${ps.length ? ps.map((p, i) => `<li><span><span class="lbl">${labelFor(i)}</span>
+      ${p.hora_original ? `<span class="tag">era ${p.hora_original.slice(0, 5)}</span>` : ''}${p.origem === 'ajuste' ? '<span class="tag">incluída por ajuste</span>' : p.origem === 'gestor' ? '<span class="tag">lançada pelo gestor</span>' : ''}
+      <span class="loc">${p.lat != null ? `<a href="${mapUrl(p)}" target="_blank" rel="noopener">${esc(localOf(p))}</a> · ±${Math.round(p.precisao || 0)} m` : esc(localOf(p))}</span></span>
+      <span class="t num">${p.t}</span></li>`).join('') : '<li class="empty" style="justify-content:center">Sem marcações neste dia.</li>'}</ul>
+    ${reqs.length ? `<h3>Solicitações</h3>${reqs.map(r => `<div class="req"><div class="h">${esc(reqText(r))} ${ST_TAG[r.status] || ''}</div>
+      <div class="m">Motivo: ${esc(r.motivo)}${r.resposta ? `<br>Resposta: ${esc(r.resposta)}` : ''}<br>${fmtTs(r.created_at)}</div>
+      ${r.status === 'pendente' ? (G ? `<div class="btn-row" style="margin-top:8px"><button class="btn sm danger" data-rej="${r.id}">Rejeitar</button><button class="btn sm primary" data-apr="${r.id}">Aprovar</button></div>`
+        : r.user_id === S.me.id ? `<button class="link" data-cancel="${r.id}">Cancelar solicitação</button>` : '') : ''}</div>`).join('')}` : ''}
+    ${canAdj ? `<h3>${G ? 'Ajustar (aplica na hora)' : 'Solicitar ajuste ao gestor'}</h3>
+    <label class="f" for="f-acao" style="margin-top:0">O que fazer</label>
+    <select id="f-acao">${Object.entries(ACOES).filter(([a]) => ps.length || (a !== 'alterar' && a !== 'remover')).map(([a, l]) => `<option value="${a}">${l}</option>`).join('')}</select>
+    <div id="fx-punch"><label class="f" for="f-punch">Marcação</label><select id="f-punch">${ps.map((p, i) => `<option value="${p.id}">${labelFor(i)} — ${p.t}</option>`).join('')}</select></div>
+    <div id="fx-hora"><label class="f" for="f-hora">Horário correto</label><input type="time" id="f-hora"></div>
+    <div id="fx-tipo"><label class="f" for="f-tipo">Tipo do dia</label><select id="f-tipo">${Object.entries(TYPES).map(([v, l]) => `<option value="${v}"${c.type === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      ${G ? `<label class="f" for="f-obs">Observação do dia</label><input id="f-obs" value="${esc(c.obs)}">` : ''}</div>
+    <label class="f" for="f-motivo">Motivo</label><textarea id="f-motivo" placeholder="Ex.: esqueci de marcar a saída; visita técnica sem sinal…"></textarea>
+    <button class="btn primary full" style="margin-top:12px" data-act="submit">${G ? 'Aplicar ajuste' : 'Enviar solicitação'}</button>` : ''}
+    ${hist.length ? `<details><summary>Histórico de alterações (${hist.length})</summary><ul>${hist.slice().reverse().map(h => `<li>${fmtTs(h.created_at)} · ${esc(nameOf(h.autor))}: ${esc(h.detalhe || h.acao)}</li>`).join('')}</ul></details>` : ''}`;
+  syncForm();
+}
+function syncForm(){
+  const a = $('f-acao')?.value; if (!a) return;
+  $('fx-punch').hidden = !(a === 'alterar' || a === 'remover');
+  $('fx-hora').hidden = !(a === 'incluir' || a === 'alterar');
+  $('fx-tipo').hidden = a !== 'tipo_dia';
+  if (a === 'alterar'){ const p = (U(SH.uid).punches[SH.k] || []).find(x => x.id === $('f-punch').value); if (p && !$('f-hora').value) $('f-hora').value = p.t; }
+}
+async function submitAdj(btn){
+  const {uid, k} = SH, a = $('f-acao').value, motivo = $('f-motivo').value.trim();
+  if (motivo.length < 3) return toast(ERR.motivo_obrigatorio);
+  const hora = ($('f-hora').value || '').slice(0, 5);
+  if ((a === 'incluir' || a === 'alterar') && !validT(hora)) return toast(ERR.hora_obrigatoria);
+  const params = {p_tipo:a, p_dia:k, p_motivo:motivo,
+    p_punch:(a === 'alterar' || a === 'remover') ? $('f-punch').value : null,
+    p_hora:(a === 'incluir' || a === 'alterar') ? hora : null,
+    p_tipo_dia:a === 'tipo_dia' ? $('f-tipo').value : null};
+  setBusyBtn(btn, true, 'Enviando…');
+  try {
+    const {error} = isG()
+      ? await sb.rpc('gestor_ajuste', {p_user:uid, ...params, p_obs:a === 'tipo_dia' ? ($('f-obs')?.value ?? null) : null})
+      : await sb.rpc('solicitar_ajuste', params);
+    if (error) throw error;
+    toast(isG() ? 'Ajuste aplicado.' : 'Solicitação enviada ao gestor.');
+    await refreshDay(uid, k);
+    if (!isG()) await loadMyReqs(); else await loadPending();
+    renderSheet(); render();
+  } catch (e){ toast(errMsg(e), 5000); setBusyBtn(btn, false); }
+}
+async function cancelReq(id){
+  if (!(await ask('Cancelar solicitação?', 'A solicitação deixará de aparecer para o gestor.', 'Cancelar solicitação'))) return;
+  const {error} = await sb.rpc('cancelar_solicitacao', {p_id:id});
+  if (error) return toast(errMsg(error));
+  toast('Solicitação cancelada.');
+  if (SH) await refreshDay(SH.uid, SH.k);
+  await loadMyReqs(); renderSheet(); render();
+}
+
+// ================= APROVAÇÕES =================
+async function loadPending(){
+  const {data, error} = await sb.from('requests').select('*').eq('status', 'pendente').order('created_at');
+  if (!error) S.pending = data || [];
+}
+function renderPending(){
+  $('a-list').innerHTML = S.pending.length ? S.pending.map(r => `<div class="card req" style="padding:14px">
+    <div class="row-between"><div class="h">${esc(nameOf(r.user_id))}</div><span class="note">${fmtTs(r.created_at)}</span></div>
+    <div class="h" style="margin-top:4px">${fmtDate(r.dia)} (${WD[dateOf(r.dia).getDay()]}) · ${esc(reqText(r))}</div>
+    <div class="m">Motivo: ${esc(r.motivo)}</div>
+    <div class="btn-row" style="margin-top:10px"><button class="btn sm" data-open-u="${r.user_id}" data-open-k="${r.dia}">Ver dia</button><button class="btn sm danger" data-rej="${r.id}">Rejeitar</button><button class="btn sm primary" data-apr="${r.id}">Aprovar</button></div>
+  </div>`).join('') : '<div class="card empty">Nenhuma solicitação pendente. 👍</div>';
+}
+async function review(id, ok, btn){
+  let resp = null;
+  if (!ok){ resp = await askText('Rejeitar solicitação', 'Justificativa para o colaborador (opcional)', 'Rejeitar'); if (resp === null) return; }
+  const r = S.pending.find(x => x.id === id) || Object.values(U(SH?.uid || S.me.id).reqs).find(x => x.id === id);
+  setBusyBtn(btn, true, '');
+  const {error} = await sb.rpc('revisar_solicitacao', {p_id:id, p_aprovar:ok, p_resposta:resp || null});
+  if (error){ setBusyBtn(btn, false); return toast(errMsg(error), 5000); }
+  toast(ok ? 'Solicitação aprovada e aplicada.' : 'Solicitação rejeitada.');
+  if (r) await refreshDay(r.user_id, r.dia);
+  await loadPending();
+  if (SH) renderSheet();
+  render();
+}
+
+// ================= EQUIPE =================
+async function loadTeam(){
+  const {data} = await sb.from('profiles').select('*').order('nome');
+  S.team = data || [];
+  const me = S.team.find(p => p.id === S.me.id); if (me) S.me = me;
+  const tk = todayKey();
+  const ps = await fetchAll(() => sb.from('punches').select('user_id,hora,lat,lng,geo_status,origem,precisao').eq('dia', tk).eq('removido', false).order('hora'));
+  S.teamToday = {};
+  ps.forEach(p => { p.t = p.hora.slice(0, 5); (S.teamToday[p.user_id] || (S.teamToday[p.user_id] = [])).push(p); });
+}
+function renderTeam(){
+  const tk = todayKey(); $('t-date').textContent = fmtDate(tk);
+  let on = 0, out = 0, none = 0;
+  const rows = S.team.filter(p => p.ativo).map(p => {
+    const ps = S.teamToday[p.id] || [], n = ps.length, exp = holiday(tk) ? 0 : Number(p.jornada[dateOf(tk).getDay()]) || 0;
+    let st, cl;
+    if (!n){ st = exp ? 'Sem marcação hoje' : 'Sem expediente hoje'; cl = ''; if (exp) none++; }
+    else if (n % 2 === 1){ st = `${n === 3 ? 'Retornou' : n === 1 ? 'Trabalhando desde' : 'Em atividade desde'} ${ps[n-1].t}`; cl = 'on'; on++; }
+    else { st = `${n === 2 ? 'Em intervalo / saiu' : 'Encerrou'} às ${ps[n-1].t}`; cl = n === 2 ? 'pause' : 'out'; out++; }
+    const last = ps[n-1], loc = last ? localOf(last) : '';
+    const pend = S.pending.filter(r => r.user_id === p.id).length;
+    return `<li class="li" data-member="${p.id}"><div><div class="main"><span class="dotst ${cl}"></span>${esc(p.nome)}</div>
+      <div class="sub">${esc(st)}${loc ? ' · ' + esc(loc) : ''}${n ? ` · ${ps.map(x => x.t).join(' ')}` : ''}</div></div>
+      <div class="side">${pend ? `<span class="tag">${pend} pend.</span>` : ''} ›</div></li>`;
+  });
+  $('t-on').textContent = on; $('t-out').textContent = out; $('t-none').textContent = none;
+  $('t-list').innerHTML = rows.join('') || '<li class="empty">Nenhum colaborador ativo. Crie contas em “Mais”.</li>';
+}
+
+// ================= RELATÓRIO =================
+function reportPeriod(){
+  if (S.rMode === 'month'){ const m = $('r-month').value || todayKey().slice(0, 7); return {from:m + '-01', to:monthEnd(m)}; }
+  let f = $('r-from').value, t = $('r-to').value; if (!f || !t) return null; if (f > t) [f, t] = [t, f]; return {from:f, to:t};
+}
+function reportUids(){
+  if (!isG()) return [S.me.id];
+  const v = $('r-who').value;
+  return v === 'todos' ? S.team.filter(p => p.ativo || p.id === S.me.id).map(p => p.id) : [v || S.me.id];
+}
+function buildReport(uid, from, to){
+  const tk = todayKey(), rows = []; let w = 0, e = 0, s = 0, adj = 0, nogps = 0, faltas = 0;
+  eachDay(from, to, k => {
+    const c = calc(uid, k), d = dateOf(k), ps = c.ps, future = k > tk, hol = holiday(k);
+    const main = [0,1,2,3].map(i => ps[i] || null), ex = ps.slice(4), extras = [];
+    for (let i = 0; i < ex.length; i += 2) extras.push(ex[i].t + (ex[i+1] ? '-' + ex[i+1].t : ''));
+    const obs = [];
+    if (c.type !== 'normal') obs.push(TYPES[c.type]); else if (hol) obs.push('Feriado: ' + hol); else if (!future && c.exp === 0 && !ps.length) obs.push('Descanso');
+    if (c.counts && c.type === 'normal' && c.exp > 0 && !ps.length){ obs.push('Falta'); faltas++; }
+    if (c.open && ps.length && k < tk) obs.push('Marcação ímpar');
+    if (c.obs) obs.push(c.obs);
+    if (c.counts){ w += c.worked; e += c.exp; s += c.saldo; }
+    adj += ps.filter(p => p.origem !== 'app' || p.hora_original).length; nogps += c.noGps;
+    const locs = [...new Set(ps.map(localOf))];
+    rows.push({k, wd:WD[d.getDay()], main, extras:extras.join(' '), worked:ps.length ? c.worked : null, exp:c.counts ? c.exp : null,
+      saldo:c.counts ? c.saldo : null, obs:obs.join(' · '), locs:locs.join(' / '), edited:c.edited, off:c.exp === 0, ps});
+  });
+  return {uid, from, to, rows, w, e, s, adj, nogps, faltas};
+}
+let repToken = 0;
+async function renderReport(){
+  $('r-who-box').hidden = !isG();
+  if (isG() && !$('r-who').options.length){
+    $('r-who').innerHTML = `<option value="todos">Toda a equipe</option>` + S.team.map(p => `<option value="${p.id}">${esc(p.nome)}${p.ativo ? '' : ' (inativo)'}</option>`).join('');
+  }
+  const P = reportPeriod();
+  if (!P){ $('r-info').textContent = 'Escolha as datas do intervalo.'; return; }
+  const my = ++repToken, uids = reportUids();
+  $('r-info').innerHTML = '<span class="spin"></span>Calculando…';
+  try { for (const uid of uids) await ensureRange(uid, P.from, P.to); } catch (e){ $('r-info').textContent = errMsg(e); return; }
+  if (my !== repToken) return;
+  const Rs = uids.map(uid => buildReport(uid, P.from, P.to));
+  const tot = Rs.reduce((a, r) => ({w:a.w + r.w, e:a.e + r.e, s:a.s + r.s, adj:a.adj + r.adj, ng:a.ng + r.nogps, f:a.f + r.faltas}), {w:0, e:0, s:0, adj:0, ng:0, f:0});
+  $('r-worked').textContent = fmtDur(tot.w); $('r-exp').textContent = fmtDur(tot.e);
+  $('r-saldo').textContent = fmtSaldo(tot.s); $('r-saldo').className = 'v num ' + cls(tot.s);
+  $('r-info').textContent = `${fmtDate(P.from)} a ${fmtDate(P.to)} · ${uids.length > 1 ? uids.length + ' pessoas · ' : ''}${tot.f} falta(s) · ${tot.adj} marcação(ões) ajustada(s) · ${tot.ng} sem GPS. O Excel inclui o espelho, todas as marcações com coordenadas e o histórico de ajustes.`;
+}
+const loadedS = {};
+function loadScript(src){
+  return loadedS[src] || (loadedS[src] = new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = src; s.onload = res;
+    s.onerror = () => { delete loadedS[src]; s.remove(); rej(new Error('Não consegui carregar o gerador de arquivos. Verifique a internet.')); };
+    document.head.appendChild(s);
+  }));
+}
+function saveFile(name, blob){
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  toast('Arquivo gerado: ' + name);
+}
+const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+async function prepReport(){
+  const P = reportPeriod(); if (!P) throw new Error('Escolha o período.');
+  const uids = reportUids();
+  for (const uid of uids) await ensureRange(uid, P.from, P.to);
+  return {P, uids, Rs:uids.map(uid => buildReport(uid, P.from, P.to))};
+}
+async function exportXlsx(btn){
+  setBusyBtn(btn, true, 'Gerando…');
+  try {
+    const {P, uids, Rs} = await prepReport();
+    await loadScript(XLSX_URL);
+    const X = window.XLSX, wb = X.utils.book_new(), used = new Set();
+    const sheetName = n => { let b = String(n).replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 28).trim() || 'Pessoa', s = b, i = 2; while (used.has(s.toLowerCase())) s = `${b.slice(0, 25)} ${i++}`; used.add(s.toLowerCase()); return s; };
+    const fmtCells = (ws, r0, r1, cols, z) => { for (let r = r0; r <= r1; r++) cols.forEach(c => { const a = X.utils.encode_cell({r, c}); if (ws[a] && ws[a].t === 'n') ws[a].z = z; }); };
+    if (Rs.length > 1){
+      const aoa = [['Resumo da equipe'], ['Empresa', S.cfg.empresa || ''], ['Período', `${fmtDate(P.from)} a ${fmtDate(P.to)}`], ['Gerado em', new Date().toLocaleString('pt-BR')], [],
+        ['Nome','Matrícula','Trabalhado','Previsto','Saldo','Saldo (min)','Faltas','Marcações ajustadas','Marcações sem GPS']];
+      Rs.forEach(R => { const p = profOf(R.uid); aoa.push([p.nome, p.matricula || '', R.w/1440, R.e/1440, fmtSaldo(R.s), R.s, R.faltas, R.adj, R.nogps]); });
+      const ws = X.utils.aoa_to_sheet(aoa); fmtCells(ws, 6, aoa.length - 1, [2, 3], '[h]:mm');
+      ws['!cols'] = [{wch:30},{wch:12},{wch:11},{wch:10},{wch:9},{wch:11},{wch:7},{wch:18},{wch:17}];
+      X.utils.book_append_sheet(wb, ws, sheetName('Resumo'));
+    }
+    Rs.forEach(R => {
+      const p = profOf(R.uid);
+      const aoa = [['Espelho de ponto'], ['Nome', p.nome], ['Matrícula', p.matricula || ''], ['Empresa', S.cfg.empresa || ''],
+        ['Período', `${fmtDate(R.from)} a ${fmtDate(R.to)}`], ['Tolerância diária (min)', Number(S.cfg.tolerancia) || 0], ['Gerado em', new Date().toLocaleString('pt-BR')], [],
+        ['Data','Dia','Entrada','Saída intervalo','Retorno intervalo','Saída','Extras','Trabalhado','Previsto','Saldo','Saldo (min)','Ajuste','Local','Observações']];
+      const r0 = aoa.length;
+      R.rows.forEach(r => aoa.push([fmtDate(r.k), r.wd, ...r.main.map(x => x ? toMin(x.t)/1440 : null), r.extras,
+        r.worked != null ? r.worked/1440 : null, r.exp != null ? r.exp/1440 : null, r.saldo != null ? fmtSaldo(r.saldo) : '', r.saldo != null ? r.saldo : null,
+        r.edited ? 'Sim' : '', r.locs, r.obs]));
+      aoa.push([]); const rt = aoa.length;
+      aoa.push(['Totais', '', null, null, null, null, '', R.w/1440, R.e/1440, fmtSaldo(R.s), R.s, '', '', '']);
+      const ws = X.utils.aoa_to_sheet(aoa);
+      fmtCells(ws, r0, rt, [2, 3, 4, 5], 'hh:mm'); fmtCells(ws, r0, rt, [7, 8], '[h]:mm');
+      ws['!cols'] = [{wch:11},{wch:5},{wch:9},{wch:14},{wch:16},{wch:9},{wch:14},{wch:11},{wch:10},{wch:9},{wch:11},{wch:7},{wch:28},{wch:36}];
+      X.utils.book_append_sheet(wb, ws, sheetName(Rs.length > 1 ? p.nome : 'Espelho'));
+    });
+    const ma = [['Nome','Data','Hora','Marcação','Origem','Hora original','Local','Latitude','Longitude','Precisão (m)','Mapa']];
+    Rs.forEach(R => R.rows.forEach(r => r.ps.forEach((x, i) => ma.push([profOf(R.uid).nome, fmtDate(r.k), toMin(x.t)/1440, labelFor(i),
+      x.origem === 'app' ? (x.hora_original ? 'App (horário ajustado)' : 'App') : x.origem === 'ajuste' ? 'Ajuste aprovado' : 'Gestor',
+      x.hora_original ? x.hora_original.slice(0, 5) : '', localOf(x), x.lat ?? '', x.lng ?? '', x.precisao != null ? Math.round(x.precisao) : '', x.lat != null ? 'Abrir mapa' : '']))));
+    const wsm = X.utils.aoa_to_sheet(ma);
+    for (let r = 1; r < ma.length; r++){
+      const a = X.utils.encode_cell({r, c:2}); if (wsm[a]) wsm[a].z = 'hh:mm';
+      const lat = ma[r][7], lng = ma[r][8]; const l = X.utils.encode_cell({r, c:10});
+      if (lat !== '' && wsm[l]) wsm[l].l = {Target:`https://www.google.com/maps?q=${lat},${lng}`};
+    }
+    wsm['!cols'] = [{wch:26},{wch:11},{wch:7},{wch:17},{wch:20},{wch:12},{wch:28},{wch:11},{wch:11},{wch:11},{wch:11}];
+    X.utils.book_append_sheet(wb, wsm, sheetName('Marcações'));
+    const la = [['Nome','Data','Registrado em','Feito por','Alteração']];
+    Rs.forEach(R => R.rows.forEach(r => (U(R.uid).hist[r.k] || []).forEach(h => la.push([profOf(R.uid).nome, fmtDate(r.k), fmtTs(h.created_at), nameOf(h.autor), h.detalhe || h.acao]))));
+    if (la.length === 1) la.push(['', '', '', '', 'Nenhum ajuste no período']);
+    const wsa = X.utils.aoa_to_sheet(la); wsa['!cols'] = [{wch:26},{wch:11},{wch:16},{wch:22},{wch:70}];
+    X.utils.book_append_sheet(wb, wsa, sheetName('Ajustes'));
+    const buf = X.write(wb, {bookType:'xlsx', type:'array'});
+    const who = Rs.length > 1 ? 'equipe' : slug(profOf(Rs[0].uid).nome);
+    saveFile(`ponto_${who}_${P.from}_a_${P.to}.xlsx`, new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  } catch (e){ toast(errMsg(e), 5000); }
+  finally { setBusyBtn(btn, false); }
+}
+async function exportPdf(btn){
+  setBusyBtn(btn, true, 'Gerando…');
+  try {
+    const {P, Rs} = await prepReport();
+    await loadScript(JSPDF_URL); await loadScript(AUTOTABLE_URL);
+    const doc = new window.jspdf.jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), sign = $('r-sign').checked;
+    const RED = [185,28,28], GREEN = [21,128,61];
+    const clean = s => String(s || '').replace(/[^\x20-\x7E -ÿ]/g, '');
+    Rs.forEach((R, idx) => {
+      if (idx) doc.addPage();
+      const p = profOf(R.uid);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(20); doc.text('Espelho de Ponto', 10, 14);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90);
+      doc.text(`Período: ${fmtDate(R.from)} a ${fmtDate(R.to)}`, W - 10, 14, {align:'right'});
+      doc.setTextColor(30);
+      doc.text(clean(`Nome: ${p.nome}     Matrícula: ${p.matricula || '-'}     Empresa: ${S.cfg.empresa || '-'}`), 10, 21);
+      const body = R.rows.map(r => [fmtDM(r.k), r.wd, ...r.main.map(x => x ? x.t + (x.origem !== 'app' || x.hora_original ? '*' : '') : ''), r.extras,
+        r.worked != null ? fmtDur(r.worked) : '', r.exp != null ? fmtDur(r.exp) : '', r.saldo != null ? fmtSaldo(r.saldo) : '', clean(r.locs), clean(r.obs)]);
+      doc.autoTable({
+        startY:25, theme:'grid', margin:{left:10, right:10, bottom:14}, showFoot:'lastPage',
+        head:[['Data','Dia','Entrada','Saída int.','Retorno','Saída','Extras','Trab.','Prev.','Saldo','Local','Observações']],
+        body, foot:[['Totais','','','','','','', fmtDur(R.w), fmtDur(R.e), fmtSaldo(R.s), '', '']],
+        styles:{font:'helvetica', fontSize:7.4, cellPadding:1.1, halign:'center', valign:'middle', lineColor:[220,216,206], lineWidth:0.15, textColor:[30,30,30]},
+        headStyles:{fillColor:[20,83,45], textColor:255, fontStyle:'bold'},
+        footStyles:{fillColor:[238,235,226], textColor:[20,20,20], fontStyle:'bold'},
+        columnStyles:{10:{halign:'left', cellWidth:52}, 11:{halign:'left', cellWidth:58}},
+        didParseCell:h => {
+          if (h.section === 'body'){ const r = R.rows[h.row.index]; if (r.off) h.cell.styles.fillColor = [246,244,238]; if (h.column.index === 9 && r.saldo) h.cell.styles.textColor = r.saldo < 0 ? RED : GREEN; }
+          if (h.section === 'foot' && h.column.index === 9 && R.s) h.cell.styles.textColor = R.s < 0 ? RED : GREEN;
+        }
+      });
+      let y = doc.lastAutoTable.finalY + 6;
+      if (y + (sign ? 32 : 12) > H - 12){ doc.addPage(); y = 18; }
+      doc.setFontSize(7.8); doc.setTextColor(90);
+      doc.text(`* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min.`, 10, y);
+      doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')} - controle de jornada da equipe. Coordenadas de cada marcação no relatório Excel.`, 10, y + 4.2);
+      if (sign){
+        y += 22; doc.setDrawColor(120); doc.setLineWidth(0.3);
+        doc.line(20, y, 110, y); doc.line(W - 110, y, W - 20, y);
+        doc.setTextColor(40); doc.setFontSize(8.5);
+        doc.text(clean(p.nome), 65, y + 4.5, {align:'center'}); doc.text('Gestor / Empresa', W - 65, y + 4.5, {align:'center'});
+      }
+    });
+    const n = doc.getNumberOfPages();
+    for (let i = 1; i <= n; i++){ doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(140); doc.text(`Página ${i} de ${n}`, W - 10, H - 6, {align:'right'}); }
+    const who = Rs.length > 1 ? 'equipe' : slug(profOf(Rs[0].uid).nome);
+    saveFile(`ponto_${who}_${P.from}_a_${P.to}.pdf`, new Blob([doc.output('arraybuffer')], {type:'application/pdf'}));
+  } catch (e){ toast(errMsg(e), 5000); }
+  finally { setBusyBtn(btn, false); }
+}
+
+// ================= ADMIN =================
+function renderAdmin(){
+  $('u-list').innerHTML = S.team.map(p => `<li class="li" data-user="${p.id}"><div><div class="main">${esc(p.nome)}${p.role === 'gestor' ? '<span class="tag type">gestor</span>' : ''}${p.ativo ? '' : '<span class="tag neg">inativo</span>'}${p.trocar_senha ? '<span class="tag info">senha temporária</span>' : ''}</div>
+    <div class="sub">${esc(p.email)}${p.matricula ? ' · Mat. ' + esc(p.matricula) : ''} · ${p.jornada.filter(x => x > 0).length} dias/sem · ${esc(FUSOS[p.fuso] || '')}</div></div><div class="side">›</div></li>`).join('') || '<li class="empty">Nenhum usuário.</li>';
+  $('loc-list').innerHTML = S.locais.map(l => `<li class="li" style="cursor:default"><div><div class="main">${esc(l.nome)}</div><div class="sub"><a href="https://www.google.com/maps?q=${l.lat},${l.lng}" target="_blank" rel="noopener">${l.lat.toFixed(5)}, ${l.lng.toFixed(5)}</a> · raio ${l.raio_m} m</div></div><button class="btn sm danger" data-del-loc="${l.id}">Excluir</button></li>`).join('') || '<li class="empty">Nenhum local cadastrado.</li>';
+  $('cfg-emp').value = S.cfg.empresa || ''; $('cfg-tol').value = S.cfg.tolerancia ?? 10;
+  $('cfg-fer').checked = S.cfg.feriados_nac !== false; $('cfg-gps').checked = !!S.cfg.exigir_gps;
+}
+function jornadaInputs(j){
+  return `<div class="wk">${[1,2,3,4,5,6,0].map(i => `<div class="it"><span>${WD[i]}</span><input type="time" id="uj-${i}" value="${minToT(Number(j[i]) || 0)}" aria-label="Jornada ${WDL[i]}"></div>`).join('')}</div>`;
+}
+const readJornada = () => [0,1,2,3,4,5,6].map(i => { const v = ($('uj-' + i).value || '').slice(0, 5); return validT(v) ? toMin(v) : 0; });
+function openUser(id){
+  const p = id ? S.team.find(x => x.id === id) : {nome:'', email:'', matricula:'', role:'colaborador', ativo:true, jornada:[0,480,480,480,480,480,0], inicio:todayKey(), fuso:'America/Sao_Paulo'};
+  SH = null;
+  $('sheet').innerHTML = `<div class="grab"></div>
+    <div class="row-between"><h2 style="margin:0">${id ? 'Editar usuário' : 'Nova conta'}</h2><button class="link" data-act="close">Fechar</button></div>
+    <label class="f" for="u-nome">Nome</label><input id="u-nome" value="${esc(p.nome)}">
+    <label class="f" for="u-email">E-mail (login)</label><input id="u-email" type="email" value="${esc(p.email)}" ${id ? 'disabled' : ''}>
+    <div class="grid2"><div><label class="f" for="u-mat">Matrícula</label><input id="u-mat" value="${esc(p.matricula)}"></div>
+      <div><label class="f" for="u-role">Perfil</label><select id="u-role"><option value="colaborador"${p.role === 'colaborador' ? ' selected' : ''}>Colaborador</option><option value="gestor"${p.role === 'gestor' ? ' selected' : ''}>Gestor</option></select></div></div>
+    <div class="grid2"><div><label class="f" for="u-ini">Início do controle</label><input id="u-ini" type="date" value="${esc(p.inicio)}"></div>
+      <div><label class="f" for="u-fuso">Fuso horário</label><select id="u-fuso">${Object.entries(FUSOS).map(([v, l]) => `<option value="${v}"${p.fuso === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div></div>
+    <label class="f">Jornada prevista por dia (00:00 = sem expediente)</label>${jornadaInputs(p.jornada)}
+    ${id ? `<label class="chk"><input type="checkbox" id="u-ativo"${p.ativo ? ' checked' : ''}> Usuário ativo (pode entrar e marcar ponto)</label>`
+         : `<label class="f" for="u-pass">Senha temporária</label><div style="display:flex;gap:8px"><input id="u-pass" value="${randomPass()}"><button class="btn sm" data-act="regen">Gerar</button></div>`}
+    <button class="btn primary full" style="margin-top:14px" data-act="${id ? 'save-user' : 'create-user'}" data-id="${id || ''}">${id ? 'Salvar' : 'Criar conta'}</button>
+    ${id ? `<button class="btn full" style="margin-top:8px" data-act="reset-pass" data-id="${id}">Redefinir senha (gera senha temporária)</button>
+            <button class="btn full" style="margin-top:8px" data-act="view-hist" data-id="${id}">Ver histórico de ponto</button>` : ''}`;
+  $('ov-sheet').classList.add('show');
+}
+async function saveUser(id, btn){
+  const nome = $('u-nome').value.trim(); if (nome.length < 2) return toast('Informe o nome.');
+  setBusyBtn(btn, true, 'Salvando…');
+  const {error} = await sb.rpc('gestor_salvar_usuario_v2', {p_id:id, p_nome:nome, p_matricula:$('u-mat').value.trim(), p_role:$('u-role').value,
+    p_ativo:$('u-ativo').checked, p_jornada:readJornada(), p_inicio:$('u-ini').value || null, p_fuso:$('u-fuso').value});
+  if (error){ setBusyBtn(btn, false); return toast(errMsg(error), 5000); }
+  for (const k of Object.keys(C)) if (k === id) delete C[k];
+  await loadTeam(); closeSheet(); toast('Usuário atualizado.'); render();
+}
+async function createUser(btn){
+  const nome = $('u-nome').value.trim(), email = $('u-email').value.trim(), senha = $('u-pass').value.trim();
+  if (nome.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast('Informe nome e e-mail válidos.');
+  if (senha.length < 8) return toast('A senha temporária precisa ter pelo menos 8 caracteres.');
+  setBusyBtn(btn, true, 'Criando…');
+  try {
+    await callAdmin({acao:'criar', nome, email, senha, matricula:$('u-mat').value.trim(), role:$('u-role').value, jornada:readJornada(), inicio:$('u-ini').value || undefined, fuso:$('u-fuso').value});
+    await loadTeam(); closeSheet(); render();
+    await showCred('Conta criada', `Ponto Equipe\nLink: ${location.origin + location.pathname}\nE-mail: ${email.toLowerCase()}\nSenha temporária: ${senha}`);
+  } catch (e){ toast(errMsg(e), 6000); setBusyBtn(btn, false); }
+}
+async function resetPass(id, btn){
+  const p = S.team.find(x => x.id === id);
+  if (!(await ask('Redefinir senha?', `Uma nova senha temporária será criada para ${p.nome}. A senha atual deixa de funcionar.`, 'Redefinir'))) return;
+  const senha = randomPass();
+  setBusyBtn(btn, true, 'Redefinindo…');
+  try {
+    await callAdmin({acao:'senha', user_id:id, senha});
+    await loadTeam(); setBusyBtn(btn, false);
+    await showCred('Senha redefinida', `Ponto Equipe\nLink: ${location.origin + location.pathname}\nE-mail: ${p.email}\nSenha temporária: ${senha}`);
+  } catch (e){ toast(errMsg(e), 6000); setBusyBtn(btn, false); }
+}
+async function addLocal(btn){
+  const nome = $('loc-nome').value.trim(), lat = parseFloat($('loc-lat').value.replace(',', '.')), lng = parseFloat($('loc-lng').value.replace(',', '.')), raio = parseInt($('loc-raio').value, 10) || 300;
+  if (!nome || !isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return toast('Preencha nome, latitude e longitude válidas.');
+  setBusyBtn(btn, true, '');
+  const {error} = await sb.from('locais').insert({nome, lat, lng, raio_m:Math.max(20, Math.min(20000, raio))});
+  setBusyBtn(btn, false);
+  if (error) return toast(errMsg(error));
+  $('loc-nome').value = ''; $('loc-lat').value = ''; $('loc-lng').value = '';
+  const {data} = await sb.from('locais').select('*').order('nome'); S.locais = data || [];
+  toast('Local adicionado.'); render();
+}
+async function delLocal(id){
+  const l = S.locais.find(x => x.id === id);
+  if (!(await ask('Excluir local?', `“${l?.nome}” deixará de identificar as marcações (as coordenadas continuam salvas).`, 'Excluir'))) return;
+  const {error} = await sb.from('locais').delete().eq('id', id);
+  if (error) return toast(errMsg(error));
+  S.locais = S.locais.filter(x => x.id !== id); render();
+}
+async function saveCfg(btn){
+  const upd = {empresa:$('cfg-emp').value.trim(), tolerancia:Math.max(0, Math.min(120, parseInt($('cfg-tol').value, 10) || 0)), feriados_nac:$('cfg-fer').checked, exigir_gps:$('cfg-gps').checked, updated_at:new Date().toISOString()};
+  setBusyBtn(btn, true, 'Salvando…');
+  const {data, error} = await sb.from('config').update(upd).eq('id', 1).select().maybeSingle();
+  setBusyBtn(btn, false);
+  if (error) return toast(errMsg(error));
+  if (data) S.cfg = data;
+  toast('Configurações salvas.'); render();
+}
+
+// ================= CONTA =================
+function renderConta(){
+  const p = S.me;
+  $('c-nome').textContent = p.nome;
+  $('c-info').innerHTML = `${esc(p.email)}<br>${p.role === 'gestor' ? 'Gestor' : 'Colaborador'}${p.matricula ? ' · Matrícula ' + esc(p.matricula) : ''}<br>Fuso: ${esc(FUSOS[p.fuso] || p.fuso)} · Controle desde ${fmtDate(p.inicio)}`;
+}
+async function changePass(p1, p2, after){
+  if (p1.length < 8) return toast('A senha precisa ter pelo menos 8 caracteres.');
+  if (p1 !== p2) return toast('As senhas não conferem.');
+  const {error} = await sb.auth.updateUser({password:p1});
+  if (error) return toast(errMsg(error), 5000);
+  await sb.rpc('senha_trocada');
+  S.me.trocar_senha = false;
+  toast('Senha atualizada.');
+  if (after) await after();
+}
+
+// ================= EVENTOS =================
+function bind(){
+  $('f-login').addEventListener('submit', async e => {
+    e.preventDefault(); const btn = $('l-go'); setBusyBtn(btn, true, 'Entrando…');
+    const {data, error} = await sb.auth.signInWithPassword({email:$('l-email').value.trim(), password:$('l-pass').value});
+    setBusyBtn(btn, false);
+    if (error) return toast(errMsg(error), 5000);
+    $('l-pass').value = '';
+    await startSession(data.session);
+  });
+  $('f-setup').addEventListener('submit', async e => {
+    e.preventDefault(); const btn = $('s-go');
+    const email = $('s-email').value.trim(), senha = $('s-pass').value;
+    setBusyBtn(btn, true, 'Criando…');
+    try {
+      await callAdmin({acao:'bootstrap', nome:$('s-nome').value.trim(), email, senha, matricula:$('s-mat').value.trim()});
+      const {data, error} = await sb.auth.signInWithPassword({email, password:senha});
+      if (error) throw error;
+      await startSession(data.session);
+    } catch (err){ toast(errMsg(err), 6000); }
+    finally { setBusyBtn(btn, false); }
+  });
+  $('f-pw').addEventListener('submit', e => { e.preventDefault(); changePass($('pw1').value, $('pw2').value, enterApp); });
+  $('f-pw2').addEventListener('submit', e => { e.preventDefault(); changePass($('cp1').value, $('cp2').value, async () => { $('cp1').value = ''; $('cp2').value = ''; }); });
+  document.addEventListener('click', async e => {
+    const t = e.target;
+    const tab = t.closest('#tabs button'); if (tab) return go(tab.dataset.v);
+    const g = t.closest('[data-go]'); if (g) return go(g.dataset.go);
+    if (t.closest('[data-logout]')){ await sb.auth.signOut(); location.hash = ''; location.reload(); return; }
+    const day = t.closest('#m-days [data-k]'); if (day) return openDay(histUid(), day.dataset.k);
+    const myr = t.closest('#my-reqs [data-open]'); if (myr) return openDay(S.me.id, myr.dataset.open);
+    const mem = t.closest('[data-member]'); if (mem){ S.target = mem.dataset.member; S.month = todayKey().slice(0, 7); return go('historico'); }
+    const ou = t.closest('[data-open-u]'); if (ou) return openDay(ou.dataset.openU, ou.dataset.openK);
+    const apr = t.closest('[data-apr]'); if (apr) return review(apr.dataset.apr, true, apr);
+    const rej = t.closest('[data-rej]'); if (rej) return review(rej.dataset.rej, false, rej);
+    const can = t.closest('[data-cancel]'); if (can) return cancelReq(can.dataset.cancel);
+    const usr = t.closest('#u-list [data-user]'); if (usr) return openUser(usr.dataset.user);
+    const dl = t.closest('[data-del-loc]'); if (dl) return delLocal(dl.dataset.delLoc);
+    const act = t.closest('#sheet [data-act]');
+    if (act){
+      const a = act.dataset.act;
+      if (a === 'close') return closeSheet();
+      if (a === 'submit') return submitAdj(act);
+      if (a === 'regen'){ $('u-pass').value = randomPass(); return; }
+      if (a === 'save-user') return saveUser(act.dataset.id, act);
+      if (a === 'create-user') return createUser(act);
+      if (a === 'reset-pass') return resetPass(act.dataset.id, act);
+      if (a === 'view-hist'){ S.target = act.dataset.id; S.month = todayKey().slice(0, 7); closeSheet(); return go('historico'); }
+    }
+  });
+  $('sheet').addEventListener('change', e => { if (e.target.id === 'f-acao' || e.target.id === 'f-punch'){ if (e.target.id === 'f-punch' || $('f-acao').value === 'alterar') $('f-hora').value = ''; syncForm(); } });
+  $('ov-sheet').addEventListener('click', e => { if (e.target.id === 'ov-sheet') closeSheet(); });
+  window.addEventListener('hashchange', route);
+  $('btn-punch').addEventListener('click', punch);
+  $('h-edit').addEventListener('click', () => openDay(S.me.id, todayKey()));
+  $('m-prev').addEventListener('click', () => { const [y, m] = S.month.split('-').map(Number); S.month = keyOf(new Date(y, m - 2, 1)).slice(0, 7); renderHist(); });
+  $('m-next').addEventListener('click', () => { const [y, m] = S.month.split('-').map(Number); S.month = keyOf(new Date(y, m, 1)).slice(0, 7); renderHist(); });
+  $('hist-who').addEventListener('change', e => { S.target = e.target.value; renderHist(); });
+  $('pick-go').addEventListener('click', () => { const v = $('pick-date').value; if (v) openDay(histUid(), v); else toast('Escolha uma data.'); });
+  $('t-reload').addEventListener('click', async () => { await Promise.all([loadTeam(), loadPending()]); render(); toast('Atualizado.'); });
+  $('a-reload').addEventListener('click', async () => { await loadPending(); render(); });
+  $('r-mode').addEventListener('click', e => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    S.rMode = b.dataset.m; $('r-mode').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    $('r-month-box').hidden = S.rMode !== 'month'; $('r-range-box').hidden = S.rMode !== 'range'; renderReport();
+  });
+  ['r-month', 'r-from', 'r-to', 'r-who'].forEach(id => $(id).addEventListener('change', renderReport));
+  $('r-xlsx').addEventListener('click', e => exportXlsx(e.currentTarget));
+  $('r-pdf').addEventListener('click', e => exportPdf(e.currentTarget));
+  $('u-new').addEventListener('click', () => openUser(null));
+  $('loc-add').addEventListener('click', e => addLocal(e.currentTarget));
+  $('loc-here').addEventListener('click', async e => {
+    const btn = e.currentTarget; setBusyBtn(btn, true, 'Localizando…'); const p = await getPos(); setBusyBtn(btn, false);
+    if (p.geo !== 'ok') return toast('Não foi possível obter a localização.');
+    $('loc-lat').value = p.lat.toFixed(6); $('loc-lng').value = p.lng.toFixed(6); toast(`Posição capturada (±${Math.round(p.acc)} m).`);
+  });
+  $('cfg-save').addEventListener('click', e => saveCfg(e.currentTarget));
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || !S.me || !$('scr-app').classList.contains('on')) return;
+    try {
+      invalidate(S.me.id, todayKey());
+      await Promise.all([ensureRange(S.me.id, todayKey(), todayKey()), isG() ? loadTeam() : loadMyReqs(), isG() ? loadPending() : null]);
+      if (S.view === 'historico') invalidate(histUid(), S.month + '-01');
+      render();
+    } catch (e) {}
+  });
+}
+function tick(){
+  const n = new Date();
+  $('h-clock').innerHTML = `${pad(n.getHours())}:${pad(n.getMinutes())}<small>:${pad(n.getSeconds())}</small>`;
+  if (!S.me) return;
+  if (S.lastKey && S.lastKey !== todayKey()) render(); else if (n.getSeconds() === 0) renderTodayLive();
+}
+
+// ================= INÍCIO =================
+(async () => {
+  const tk = todayKey(); S.month = tk.slice(0, 7);
+  $('r-month').value = S.month; $('r-from').value = S.month + '-01'; $('r-to').value = tk; $('pick-date').value = tk;
+  bind(); tick(); setInterval(tick, 1000);
+  sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT'){ S.me = null; for (const k of Object.keys(C)) delete C[k]; showLogin(); } });
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    if (session) await startSession(session); else await showLogin();
+  } catch (e){ await showLogin(); toast(errMsg(e)); }
+})();
+})();
+</script>
+</body>
+</html>
