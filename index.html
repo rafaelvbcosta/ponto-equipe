@@ -213,7 +213,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
         <div><div class="note">Banco acumulado desde <span id="h-since"></span></div><div class="big num" id="h-acc">0:00</div></div>
       </div>
       <div class="note" id="h-lanc" style="margin-top:8px" hidden></div>
-      <div class="note" style="margin-top:10px">Extras pagas no mês: <b class="num" id="h-paga">0:00</b> <span id="h-regra"></span><br>Extras 100% (domingos e feriados) no mês: <b class="num" id="h-p100">0:00</b></div>
+      <div class="note" style="margin-top:10px">Extras pagas no mês: <b class="num" id="h-paga">0:00</b> <span id="h-regra"></span><br>Das quais em domingos e feriados (100%): <b class="num" id="h-p100">0:00</b><br>As extras pagas recomeçam do zero a cada mês; o banco de horas é acumulado.</div>
       <div class="banner" id="h-pending" style="margin:12px 0 0" hidden></div>
     </div>
   </section>
@@ -249,6 +249,11 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
         <button class="btn primary full" style="margin-top:12px" id="lc-add">Lançar no banco</button>
         <div class="note" style="margin-top:8px">Saldo de antes do app: use como data o dia anterior ao início do controle. Horas pagas ou folga compensada: use Débito. O lançamento entra direto no saldo, sem tolerância nem limite diário.</div>
       </div>
+    </div>
+    <div class="card" id="mes-card" hidden>
+      <h2>Resumo por mês</h2>
+      <div class="note">As extras pagas fecham a cada mês (o mês novo começa do zero); o banco de horas continua acumulando.</div>
+      <ul class="list" id="mes-list" style="margin-top:6px"></ul>
     </div>
     <div class="card" id="per-card" hidden>
       <h2>Férias e afastamentos</h2>
@@ -336,7 +341,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <div class="grid2"><div><label class="f" for="cfg-tol">Tolerância diária (min)</label><input id="cfg-tol" type="number" min="0" max="120" inputmode="numeric"></div>
       <div><label class="f" for="cfg-int">Intervalo mínimo (min)</label><input id="cfg-int" type="number" min="0" max="240" inputmode="numeric"></div></div>
       <label class="f" for="cfg-lim">Máximo diário de horas extras para o banco (min)</label><input id="cfg-lim" type="number" min="0" max="720" inputmode="numeric">
-      <div class="note" style="margin-top:6px">Exemplo: 120 = as 2 primeiras horas extras do dia vão para o banco e o restante é pago. Faltas e atrasos sempre descontam do banco. Domingos e feriados (sem jornada prevista) contam integralmente como extra a 100%.</div>
+      <div class="note" style="margin-top:6px">Exemplo: 120 = as 2 primeiras horas extras do dia vão para o banco e o restante é pago, em qualquer dia (semana, sábado, domingo ou feriado). O que for pago em domingo ou feriado aparece separado como extra 100%. Faltas e atrasos sempre descontam do banco.</div>
       <div class="note" style="margin-top:6px">Em dias com mais de 6h trabalhadas, se o intervalo não for marcado ou for menor que o mínimo, a diferença é descontada automaticamente (CLT art. 71). Use 0 para desligar.</div>
       <label class="chk"><input type="checkbox" id="cfg-fer"> Considerar feriados nacionais automaticamente</label>
       <label class="chk"><input type="checkbox" id="cfg-gps"> Exigir localização para registrar o ponto</label>
@@ -552,11 +557,11 @@ function calc(uid, k, live){
   let saldo = counts ? worked - exp : 0;
   if (counts && Math.abs(saldo) <= (Number(S.cfg.tolerancia) || 0)) saldo = 0;
   const lim = Math.max(0, Number(S.cfg.limite_banco_dia ?? 120));
-  // Domingo ou feriado sem jornada prevista: tudo que for trabalhado é extra a 100% (não vai para o banco)
+  // Regra única para todos os dias (semana, sábado, domingo e feriado): as primeiras `lim` min de extra vão para o banco,
+  // o excedente é pago. O excedente de domingo/feriado sem jornada prevista fica separado em paga100 (pago a 100%).
   const dom100 = exp === 0 && (dateOf(k).getDay() === 0 || !!holiday(k) || dayType(uid, k) === 'feriado');
-  let banco, paga, paga100 = 0;
-  if (dom100){ paga100 = counts ? worked : 0; saldo = paga100; banco = 0; paga = 0; }
-  else { banco = saldo > 0 ? Math.min(saldo, lim) : saldo; paga = saldo > 0 ? saldo - banco : 0; }
+  const banco = saldo > 0 ? Math.min(saldo, lim) : saldo, exc = saldo > 0 ? saldo - banco : 0;
+  const paga = dom100 ? 0 : exc, paga100 = dom100 ? exc : 0;
   const st = U(uid).status[k];
   // Hora extra do dia (saldo positivo depois da tolerância) pede um motivo do colaborador
   const extra = counts && saldo > 0, just = U(uid).just[k]?.motivo || '';
@@ -739,8 +744,8 @@ function renderToday(){
   $('h-acc').textContent = fmtSaldo(ab); $('h-acc').className = 'big num ' + cls(ab);
   $('h-lanc').hidden = !lancDe(uid, null, tk).length;
   $('h-lanc').innerHTML = `Inclui lançamentos manuais do gestor: <b class="num">${fmtSaldo(lt)}</b> (detalhes no Histórico).`;
-  $('h-paga').textContent = fmtDur(m.pg); $('h-p100').textContent = fmtDur(m.p100);
-  $('h-regra').textContent = `(o que passa de ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))}/dia em dias normais)`;
+  $('h-paga').textContent = fmtDur(m.pg + m.p100); $('h-p100').textContent = fmtDur(m.p100);
+  $('h-regra').textContent = `(o que passa de ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra por dia)`;
   $('h-since').textContent = fmtDate(ini);
   const pe = $('h-pending');
   if (acc.odd.length){ pe.hidden = false; pe.textContent = `Atenção: ${acc.odd.length} dia(s) com número ímpar de marcações (${acc.odd.slice(-5).map(fmtDM).join(', ')}). Abra o dia no Histórico e solicite o ajuste.`; }
@@ -836,7 +841,7 @@ async function renderHist(){
   if (!loaded) $('m-days').innerHTML = '<li class="empty"><span class="spin"></span>Carregando…</li>';
   try { await ensureRange(uid, first, last); } catch (e){ $('m-days').innerHTML = `<li class="empty">${esc(errMsg(e))}</li>`; return; }
   if (histUid() !== uid || S.view !== 'historico') return;
-  renderLanc(uid);
+  renderLanc(uid); renderMeses(uid);
   $('per-card').hidden = !isG();
   if (isG() && $('per-card').dataset.uid !== uid){ $('per-card').dataset.uid = uid; $('pe-de').value = tk; $('pe-ate').value = ''; $('pe-tipo').value = 'ferias'; $('pe-mot').value = ''; }
   const keys = []; eachDay(first, last, k => { if (k <= tk || U(uid).punches[k] || U(uid).status[k]) keys.push(k); });
@@ -866,6 +871,23 @@ async function renderHist(){
       <div class="r"><div class="w num">${np ? fmtDur(c.worked) : ''}</div><div class="num ${cls(c.saldo)}">${c.counts && (c.exp || c.worked) ? fmtSaldo(c.saldo) : ''}</div></div></li>`;
   }).join('') : '<li class="empty">Nenhum dia neste mês.</li>';
   if (!isG()) renderMyReqs();
+}
+let mesTok = 0;
+async function renderMeses(uid){
+  const card = $('mes-card'), my = ++mesTok, tk = todayKey(), p = profOf(uid), ini = p.inicio || tk;
+  try { await Promise.all([ensureLanc(uid), ensureRange(uid, minK(ini, tk), tk)]); } catch (e){ card.hidden = true; return; }
+  if (my !== mesTok || histUid() !== uid) return;
+  const meses = monthsBetween(minK(ini, tk), tk).reverse();
+  card.hidden = !meses.length;
+  $('mes-list').innerHTML = meses.map(m => {
+    const a = m + '-01', z = monthEnd(m) < tk ? monthEnd(m) : tk;
+    const r = sumRange(uid, a > ini ? a : ini, z), bm = r.b + lancSum(uid, a, z);
+    const acum = sumRange(uid, ini, z).b + lancSum(uid, null, z);
+    const [y, mm] = m.split('-').map(Number);
+    return `<li class="li" style="cursor:default"><div><div class="main" style="text-transform:capitalize">${MES[mm - 1]} ${y}${m === tk.slice(0, 7) ? ' <span class="tag info">em andamento</span>' : ''}</div>
+      <div class="sub">Extras pagas <b class="num">${fmtDur(r.pg + r.p100)}</b>${r.p100 ? ` (${fmtDur(r.p100)} em dom./feriado)` : ''} · Banco no mês <b class="num ${cls(bm)}">${fmtSaldo(bm)}</b></div></div>
+      <div class="side"><div class="note" style="font-weight:700">acumulado</div><div class="num ${cls(acum)}">${fmtSaldo(acum)}</div></div></li>`;
+  }).join('');
 }
 let lancTok = 0;
 async function renderLanc(uid){
@@ -1262,7 +1284,7 @@ async function exportPdf(btn){
       doc.text(`Banco de horas: saldo anterior ${fmtSaldo(R.ex.ant)}  +  dias do período ${fmtSaldo(R.ex.dias)}  +  lançamentos manuais ${fmtSaldo(R.ex.lanc)}  =  saldo final ${fmtSaldo(R.ex.fim)}`, 10, y);
       doc.setFont('helvetica', 'normal'); y += 6;
       doc.setFontSize(7.8); doc.setTextColor(90);
-      const rodape = `* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Extras sem justificativa: ${R.semJust}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min. Intervalo mínimo: ${Number(S.cfg.intervalo_min ?? 60)} min. Até ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra por dia vão para o banco; o excedente é pago. Domingos e feriados: tudo extra a 100%.`;
+      const rodape = `* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Extras sem justificativa: ${R.semJust}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min. Intervalo mínimo: ${Number(S.cfg.intervalo_min ?? 60)} min. Em qualquer dia, até ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra vão para o banco e o excedente é pago (em domingo/feriado, a 100%).`;
       const nota = doc.splitTextToSize(rodape, W - 20);
       doc.text(nota, 10, y); y += (nota.length - 1) * 3.4;
       doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')} - controle de jornada da equipe. Coordenadas de cada marcação no relatório Excel.`, 10, y + 4.2);
