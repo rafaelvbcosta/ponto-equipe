@@ -336,6 +336,17 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <div class="btn-row" style="margin-top:10px"><button class="btn" id="loc-here">Usar minha posição</button><button class="btn primary" id="loc-add">Adicionar</button></div>
     </div>
     <div class="card">
+      <h2>Feriados da empresa</h2>
+      <div class="note">Feriados municipais, estaduais e pontes que o app não conhece sozinho (ele já considera os nacionais). Valem para o cálculo, os relatórios e os lembretes.</div>
+      <ul class="list" id="fer-list" style="margin-top:6px"></ul>
+      <h3>Adicionar feriado</h3>
+      <div class="grid2"><div><label class="f" for="fer-dia" style="margin-top:0">Data</label><input type="date" id="fer-dia"></div>
+        <div><label class="f" for="fer-quem" style="margin-top:0">Vale para</label><select id="fer-quem"><option value="todos">Toda a equipe</option><option value="alguns">Pessoas escolhidas</option></select></div></div>
+      <label class="f" for="fer-nome">Nome</label><input id="fer-nome" placeholder="Ex.: Imaculada Conceição (BH)" autocomplete="off">
+      <div id="fer-pessoas" hidden></div>
+      <button class="btn primary full" style="margin-top:12px" id="fer-add">Adicionar feriado</button>
+    </div>
+    <div class="card">
       <h2>Configurações gerais</h2>
       <label class="f" for="cfg-emp" style="margin-top:0">Empresa (aparece nos relatórios)</label><input id="cfg-emp">
       <div class="grid2"><div><label class="f" for="cfg-tol">Tolerância diária (min)</label><input id="cfg-tol" type="number" min="0" max="120" inputmode="numeric"></div>
@@ -348,7 +359,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <label class="chk"><input type="checkbox" id="cfg-lemb"> Enviar lembretes de marcação no início e no fim do horário</label>
       <label class="f" for="cfg-lmin">Enviar o lembrete quantos minutos depois do horário</label><input id="cfg-lmin" type="number" min="0" max="60" inputmode="numeric">
       <div class="note" style="margin-top:6px">Cada pessoa ativa os lembretes no próprio celular, em Conta. Só avisa quem ainda não marcou a entrada (ou está com a jornada aberta na hora da saída). Não avisa em dias sem jornada, feriados, folgas, férias e atestados.</div>
-      <div class="note" style="margin-top:8px">Feriados estaduais/municipais e pontos facultativos: ajuste o “tipo do dia” na pessoa. Diferenças de até a tolerância no dia não entram no saldo (CLT art. 58 §1º prevê até 10 min).</div>
+      <div class="note" style="margin-top:8px">Feriados estaduais/municipais e pontos facultativos: cadastre em “Feriados da empresa”, acima. Diferenças de até a tolerância no dia não entram no saldo (CLT art. 58 §1º prevê até 10 min).</div>
       <button class="btn primary full" style="margin-top:12px" id="cfg-save">Salvar configurações</button>
     </div>
   </section>
@@ -448,7 +459,10 @@ function pascoa(y){
   const mes = Math.floor((h+l-7*m+114)/31), dia = ((h+l-7*m+114)%31)+1;
   return (pascoaC[y] = keyOf(new Date(y, mes-1, dia, 12)));
 }
-function holiday(k){
+// Feriado do dia: feriados da empresa (cadastrados pelo gestor, para todos ou para pessoas escolhidas) + nacionais
+function feriadoEmpresa(k, uid){ return (S.feriados || []).find(f => f.dia === k && (f.todos || (uid && (f.usuarios || []).includes(uid)))) || null; }
+function holiday(k, uid){
+  const fe = feriadoEmpresa(k, uid); if (fe) return fe.nome;
   if (S.cfg && S.cfg.feriados_nac === false) return null;
   if (FIXOS[k.slice(5)]) return FIXOS[k.slice(5)];
   if (k === addDays(pascoa(Number(k.slice(0, 4))), -2)) return 'Sexta-feira Santa';
@@ -458,7 +472,7 @@ function holiday(k){
 // ================= ESTADO =================
 const S = {
   session:null, me:null, cfg:{tolerancia:10, feriados_nac:true, exigir_gps:false, empresa:'', intervalo_min:60, limite_banco_dia:120, lembretes:true, lembrete_min:5}, locais:[], team:[],
-  teamToday:{}, pending:[], myReqs:[], view:'hoje', month:null, target:null, rMode:'month', lastKey:null, gpsState:''
+  feriados:[], teamToday:{}, pending:[], myReqs:[], view:'hoje', month:null, target:null, rMode:'month', lastKey:null, gpsState:''
 };
 const C = {};
 const U = uid => C[uid] || (C[uid] = {months:new Set(), punches:{}, status:{}, reqs:{}, hist:{}, lanc:null, just:{}});
@@ -483,6 +497,10 @@ const nameOf = uid => profOf(uid)?.nome || '—';
 // Autor de uma alteração: o colaborador não enxerga os outros perfis, então quem não é ele aparece como "Gestor"
 const autorOf = id => !id ? '—' : id === S.me?.id ? S.me.nome : (S.team.find(p => p.id === id)?.nome || 'Gestor');
 
+async function loadFeriados(){
+  const {data, error} = await sb.from('feriados_locais').select('*').eq('removido', false).order('dia');
+  if (!error) S.feriados = data || [];
+}
 async function fetchAll(build){
   let out = [], from = 0;
   for (;;){
@@ -529,7 +547,7 @@ const dayPunches = (uid, k) => (U(uid).punches[k] || []).slice().sort((a, b) => 
 function dayType(uid, k){ return U(uid).status[k]?.tipo || 'normal'; }
 function expectedFor(uid, k){
   if (dayType(uid, k) !== 'normal') return 0;
-  if (holiday(k)) return 0;
+  if (holiday(k, uid)) return 0;
   return Number((profOf(uid)?.jornada || [])[dateOf(k).getDay()]) || 0;
 }
 function calc(uid, k, live){
@@ -559,7 +577,7 @@ function calc(uid, k, live){
   const lim = Math.max(0, Number(S.cfg.limite_banco_dia ?? 120));
   // Regra única para todos os dias (semana, sábado, domingo e feriado): as primeiras `lim` min de extra vão para o banco,
   // o excedente é pago. O excedente de domingo/feriado sem jornada prevista fica separado em paga100 (pago a 100%).
-  const dom100 = exp === 0 && (dateOf(k).getDay() === 0 || !!holiday(k) || dayType(uid, k) === 'feriado');
+  const dom100 = exp === 0 && (dateOf(k).getDay() === 0 || !!holiday(k, uid) || dayType(uid, k) === 'feriado');
   const banco = saldo > 0 ? Math.min(saldo, lim) : saldo, exc = saldo > 0 ? saldo - banco : 0;
   const paga = dom100 ? 0 : exc, paga100 = dom100 ? exc : 0;
   const st = U(uid).status[k];
@@ -665,6 +683,7 @@ async function enterApp(){
     const [cfg, loc] = await Promise.all([sb.from('config').select('*').eq('id', 1).maybeSingle(), sb.from('locais').select('*').order('nome')]);
     if (cfg.data) S.cfg = cfg.data;
     S.locais = loc.data || [];
+    await loadFeriados();
     if (isG()) await loadTeam();
     await Promise.all([ensureRange(S.me.id, S.me.inicio < S.month + '-01' ? S.me.inicio : S.month + '-01', todayKey()), loadMyReqs(), isG() ? loadPending() : null, ensureLanc(S.me.id)]);
   } catch (e){ showBanner('Não consegui carregar todos os dados: ' + errMsg(e)); }
@@ -736,7 +755,7 @@ function renderToday(){
   if (!punching) $('btn-punch').innerHTML = `Registrar ${esc(labelFor(n).toLowerCase())}<span class="sub">${n ? 'Última marcação: ' + c.ps[n-1].t : 'Nenhuma marcação hoje'}</span>`;
   $('h-gps').textContent = S.gpsState;
   renderTodayLive();
-  const tName = c.type !== 'normal' ? TYPES[c.type] : holiday(tk) ? 'Feriado: ' + holiday(tk) : '';
+  const tName = c.type !== 'normal' ? TYPES[c.type] : holiday(tk, uid) ? 'Feriado: ' + holiday(tk, uid) : '';
   const pend = Object.values(U(uid).reqs).filter(r => r.dia === tk && r.status === 'pendente').length;
   $('h-list').innerHTML = (tName ? `<li><span class="lbl">Hoje</span><span class="tag type">${esc(tName)}</span></li>` : '') +
     (n ? c.ps.map((p, i) => `<li><span><span class="lbl">${labelFor(i)}${p.hora_original || p.origem !== 'app' ? '<span class="tag">ajustado</span>' : ''}</span><span class="loc">${p.lat != null ? `<a href="${mapUrl(p)}" target="_blank" rel="noopener">${esc(localOf(p))}</a>` : esc(localOf(p))}</span></span><span class="t num">${p.t}</span></li>`).join('')
@@ -858,7 +877,7 @@ async function renderHist(){
   setAcumulado(uid);
   const reqs = Object.values(U(uid).reqs);
   $('m-days').innerHTML = keys.length ? keys.map(k => {
-    const c = calc(uid, k), d = dateOf(k), np = c.ps.length, hol = holiday(k);
+    const c = calc(uid, k), d = dateOf(k), np = c.ps.length, hol = holiday(k, uid);
     const ptxt = np ? `<div class="p num">${c.ps.map(p => esc(p.t) + (p.hora_original || p.origem !== 'app' ? '*' : '')).join(' ')}</div>`
       : `<div class="p muted">${c.type !== 'normal' ? esc(TYPES[c.type]) : hol ? 'Feriado: ' + esc(hol) : k === tk ? 'Sem marcações ainda' : c.exp ? (c.counts ? 'Falta / sem marcações' : 'Sem marcações') : 'Sem expediente'}</div>`;
     const tags = [];
@@ -963,7 +982,7 @@ async function aplicarPeriodo(btn){
   if (!de || !ate) return toast('Informe as datas de início e fim.');
   if (ate < de) return toast(ERR.periodo_invalido);
   if (mot.length < 3) return toast(ERR.motivo_obrigatorio);
-  let n = 0, uteis = 0; eachDay(de, ate, k => { n++; if (!holiday(k) && Number(p.jornada?.[dateOf(k).getDay()]) > 0) uteis++; });
+  let n = 0, uteis = 0; eachDay(de, ate, k => { n++; if (!holiday(k, uid) && Number(p.jornada?.[dateOf(k).getDay()]) > 0) uteis++; });
   if (n > 367) return toast(ERR.periodo_invalido);
   const nome = tipo === 'normal' ? 'Dia normal' : TYPES[tipo];
   if (!(await ask('Aplicar ao período?', `${p.nome}: ${fmtDate(de)} a ${fmtDate(ate)} (${n} dia${n > 1 ? 's' : ''}, ${uteis} com jornada prevista) como “${nome}”. Dias desse período que já tinham outro tipo serão substituídos.`, 'Aplicar'))) return;
@@ -999,7 +1018,7 @@ async function openDay(uid, k){
 function closeSheet(){ $('ov-sheet').classList.remove('show'); SH = null; }
 function renderSheet(){
   if (!SH) return;
-  const {uid, k} = SH, d = dateOf(k), u = U(uid), ps = dayPunches(uid, k), c = calc(uid, k), G = isG(), hol = holiday(k);
+  const {uid, k} = SH, d = dateOf(k), u = U(uid), ps = dayPunches(uid, k), c = calc(uid, k), G = isG(), hol = holiday(k, uid);
   const reqs = Object.values(u.reqs).filter(r => r.dia === k).sort((a, b) => b.created_at.localeCompare(a.created_at));
   const hist = u.hist[k] || [];
   const ini = profOf(uid)?.inicio;
@@ -1111,7 +1130,7 @@ function renderTeam(){
   const tk = todayKey(); $('t-date').textContent = fmtDate(tk);
   let on = 0, out = 0, none = 0;
   const rows = S.team.filter(p => p.ativo).map(p => {
-    const ps = S.teamToday[p.id] || [], n = ps.length, tipoHoje = S.teamStatus?.[p.id], exp = holiday(tk) || tipoHoje ? 0 : Number(p.jornada[dateOf(tk).getDay()]) || 0;
+    const ps = S.teamToday[p.id] || [], n = ps.length, tipoHoje = S.teamStatus?.[p.id], exp = holiday(tk, p.id) || tipoHoje ? 0 : Number(p.jornada[dateOf(tk).getDay()]) || 0;
     let st, cl;
     if (!n){ st = tipoHoje ? TYPES[tipoHoje] : exp ? 'Sem marcação hoje' : 'Sem expediente hoje'; cl = ''; if (exp) none++; }
     else if (n % 2 === 1){ st = `Trabalhando desde ${ps[n-1].t}`; cl = 'on'; on++; }
@@ -1139,7 +1158,7 @@ function reportUids(){
 function buildReport(uid, from, to){
   const tk = todayKey(), rows = []; let w = 0, e = 0, s = 0, b = 0, pg = 0, p100 = 0, adj = 0, nogps = 0, faltas = 0, semJust = 0;
   eachDay(from, to, k => {
-    const c = calc(uid, k), d = dateOf(k), ps = c.ps, future = k > tk, hol = holiday(k);
+    const c = calc(uid, k), d = dateOf(k), ps = c.ps, future = k > tk, hol = holiday(k, uid);
     const main = ps.length === 2 ? [ps[0], null, null, ps[1]] : [0,1,2,3].map(i => ps[i] || null), ex = ps.slice(4), extras = [];
     for (let i = 0; i < ex.length; i += 2) extras.push(ex[i].t + (ex[i+1] ? '-' + ex[i+1].t : ''));
     const obs = [];
@@ -1326,6 +1345,7 @@ function renderAdmin(){
   $('u-list').innerHTML = S.team.map(p => `<li class="li" data-user="${p.id}"><div><div class="main">${esc(p.nome)}${p.role === 'gestor' ? '<span class="tag type">gestor</span>' : ''}${p.ativo ? '' : '<span class="tag neg">inativo</span>'}${p.trocar_senha ? '<span class="tag info">senha temporária</span>' : ''}</div>
     <div class="sub">${esc(p.email)}${p.matricula ? ' · Mat. ' + esc(p.matricula) : ''} · ${p.jornada.filter(x => x > 0).length} dias/sem · ${esc(FUSOS[p.fuso] || '')}</div></div><div class="side">›</div></li>`).join('') || '<li class="empty">Nenhum usuário.</li>';
   $('loc-list').innerHTML = S.locais.map(l => `<li class="li" style="cursor:default"><div><div class="main">${esc(l.nome)}</div><div class="sub"><a href="https://www.google.com/maps?q=${l.lat},${l.lng}" target="_blank" rel="noopener">${l.lat.toFixed(5)}, ${l.lng.toFixed(5)}</a> · raio ${l.raio_m} m</div></div><button class="btn sm danger" data-del-loc="${l.id}">Excluir</button></li>`).join('') || '<li class="empty">Nenhum local cadastrado.</li>';
+  renderFeriados();
   $('cfg-emp').value = S.cfg.empresa || ''; $('cfg-tol').value = S.cfg.tolerancia ?? 10; $('cfg-int').value = S.cfg.intervalo_min ?? 60; $('cfg-lim').value = S.cfg.limite_banco_dia ?? 120;
   $('cfg-fer').checked = S.cfg.feriados_nac !== false; $('cfg-gps').checked = !!S.cfg.exigir_gps;
   $('cfg-lemb').checked = S.cfg.lembretes !== false; $('cfg-lmin').value = S.cfg.lembrete_min ?? 5;
@@ -1409,6 +1429,40 @@ async function delLocal(id){
   const {error} = await sb.from('locais').delete().eq('id', id);
   if (error) return toast(errMsg(error));
   S.locais = S.locais.filter(x => x.id !== id); render();
+}
+function renderFeriados(){
+  const tk = todayKey(), lim = addDays(tk, -60);
+  const fs = (S.feriados || []).slice().sort((a, b) => a.dia.localeCompare(b.dia));
+  const li = f => { const quem = f.todos ? 'Toda a equipe' : (f.usuarios || []).map(id => nameOf(id).split(' ')[0]).join(', ');
+    return `<li class="li" style="cursor:default"><div><div class="main">${fmtDate(f.dia)} · ${WD[dateOf(f.dia).getDay()]}</div><div class="sub">${esc(f.nome)} · ${esc(quem)}</div></div><button class="btn sm danger" data-del-fer="${f.id}">Remover</button></li>`; };
+  const prox = fs.filter(f => f.dia >= lim), ant = fs.filter(f => f.dia < lim);
+  $('fer-list').innerHTML = (prox.map(li).join('') || '<li class="empty">Nenhum feriado cadastrado.</li>') +
+    (ant.length ? `<li style="list-style:none"><details><summary>Anteriores (${ant.length})</summary><ul class="list">${ant.reverse().map(li).join('')}</ul></details></li>` : '');
+  const box = $('fer-pessoas');
+  const sig = S.team.filter(p => p.ativo).map(p => p.id).join();
+  if (box.dataset.sig !== sig){ box.dataset.sig = sig; box.innerHTML = '<label class="f">Pessoas</label>' + S.team.filter(p => p.ativo).map(p => `<label class="chk" style="margin-top:6px"><input type="checkbox" value="${p.id}"> ${esc(p.nome)}</label>`).join(''); }
+  box.hidden = $('fer-quem').value !== 'alguns';
+}
+async function addFeriado(btn){
+  const dia = $('fer-dia').value, nome = $('fer-nome').value.trim(), todos = $('fer-quem').value === 'todos';
+  const usuarios = todos ? [] : [...$('fer-pessoas').querySelectorAll('input:checked')].map(x => x.value);
+  if (!dia) return toast('Informe a data do feriado.');
+  if (nome.length < 3) return toast('Informe o nome do feriado.');
+  if (!todos && !usuarios.length) return toast('Escolha pelo menos uma pessoa.');
+  if ((S.feriados || []).some(f => f.dia === dia && (f.todos || todos))) return toast('Já existe um feriado nessa data.');
+  setBusyBtn(btn, true, 'Salvando…');
+  const {error} = await sb.from('feriados_locais').insert({dia, nome, todos, usuarios});
+  setBusyBtn(btn, false);
+  if (error) return toast(errMsg(error), 5000);
+  $('fer-nome').value = ''; $('fer-dia').value = ''; $('fer-pessoas').querySelectorAll('input').forEach(x => { x.checked = false; });
+  await loadFeriados(); toast(`Feriado de ${fmtDate(dia)} adicionado.`); render();
+}
+async function delFeriado(id){
+  const f = (S.feriados || []).find(x => x.id === id); if (!f) return;
+  if (!(await ask('Remover feriado?', `${fmtDate(f.dia)} – ${f.nome}. O dia volta a ter jornada normal para ${f.todos ? 'toda a equipe' : 'as pessoas escolhidas'}.`, 'Remover'))) return;
+  const {error} = await sb.from('feriados_locais').update({removido:true}).eq('id', id);
+  if (error) return toast(errMsg(error), 5000);
+  await loadFeriados(); toast('Feriado removido.'); render();
 }
 async function saveCfg(btn){
   const upd = {empresa:$('cfg-emp').value.trim(), tolerancia:Math.max(0, Math.min(120, parseInt($('cfg-tol').value, 10) || 0)), intervalo_min:Math.max(0, Math.min(240, parseInt($('cfg-int').value, 10) || 0)), limite_banco_dia:Math.max(0, Math.min(720, parseInt($('cfg-lim').value, 10) || 0)), feriados_nac:$('cfg-fer').checked, exigir_gps:$('cfg-gps').checked, lembretes:$('cfg-lemb').checked, lembrete_min:Math.max(0, Math.min(60, parseInt($('cfg-lmin').value, 10) || 0)), updated_at:new Date().toISOString()};
@@ -1606,6 +1660,7 @@ function bind(){
     const can = t.closest('[data-cancel]'); if (can) return cancelReq(can.dataset.cancel);
     const usr = t.closest('#u-list [data-user]'); if (usr) return openUser(usr.dataset.user);
     const dl = t.closest('[data-del-loc]'); if (dl) return delLocal(dl.dataset.delLoc);
+    const dfe = t.closest('[data-del-fer]'); if (dfe) return delFeriado(dfe.dataset.delFer);
     const dlc = t.closest('[data-del-lanc]'); if (dlc) return delLanc(dlc.dataset.delLanc);
     const act = t.closest('#sheet [data-act]');
     if (act){
@@ -1649,12 +1704,14 @@ function bind(){
   $('cfg-save').addEventListener('click', e => saveCfg(e.currentTarget));
   $('lc-add').addEventListener('click', e => addLanc(e.currentTarget));
   $('pe-go').addEventListener('click', e => aplicarPeriodo(e.currentTarget));
+  $('fer-add').addEventListener('click', e => addFeriado(e.currentTarget));
+  $('fer-quem').addEventListener('change', () => { $('fer-pessoas').hidden = $('fer-quem').value !== 'alguns'; });
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible' || !S.me || !$('scr-app').classList.contains('on')) return;
     try {
       invalidate(S.me.id, todayKey());
       lancFalhou = false;
-      await Promise.all([ensureLanc(S.me.id, true), ensureRange(S.me.id, todayKey(), todayKey()), isG() ? loadTeam() : loadMyReqs(), isG() ? loadPending() : null]);
+      await Promise.all([loadFeriados(), ensureLanc(S.me.id, true), ensureRange(S.me.id, todayKey(), todayKey()), isG() ? loadTeam() : loadMyReqs(), isG() ? loadPending() : null]);
       if (S.view === 'historico') invalidate(histUid(), S.month + '-01');
       render();
     } catch (e) {}
