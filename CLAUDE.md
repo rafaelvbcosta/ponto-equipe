@@ -18,7 +18,7 @@ Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele
 
 - O front usa a chave *publishable*; toda a segurança está em RLS + funções `security definer`.
 - Tabelas só têm políticas de SELECT (exceto `config` e `locais` para gestor). **Nenhuma escrita direta em `punches`, `requests`, `day_status`, `historico`**: tudo passa por RPC.
-- RPCs: `registrar_ponto` (horário do servidor, no `profiles.fuso`; bloqueia repetição em menos de 2 min sem `p_forcar`), `solicitar_ajuste`, `cancelar_solicitacao`, `revisar_solicitacao` (gestor), `gestor_ajuste` (gestor, aplica direto), `gestor_salvar_usuario_v3` (v2 ainda existe), `senha_trocada`, `existe_gestor` (anon), `push_salvar`, `push_remover`, `vapid_publica`.
+- RPCs: `registrar_ponto` (horário do servidor, no `profiles.fuso`; bloqueia repetição em menos de 2 min sem `p_forcar`), `solicitar_ajuste`, `cancelar_solicitacao`, `revisar_solicitacao` (gestor), `gestor_ajuste` (gestor, aplica direto), `gestor_salvar_usuario_v3` (v2 ainda existe), `senha_trocada`, `existe_gestor` (anon), `push_salvar`, `push_remover`, `vapid_publica`, `gestor_lancar_banco` e `gestor_remover_lancamento` (gestor).
 - `_aplicar_ajuste` é interna (sem execute para ninguém) e grava em `historico`. Marcações nunca são apagadas: `removido = true`; alteração guarda `hora_original`.
 - Contas são criadas pela Edge Function (`criar`, `senha`). `bootstrap` só funciona enquanto não existe nenhum gestor. Cadastro público do Supabase Auth está **desligado**.
 - Mudanças de schema: sempre por `apply_migration`, preferindo mudanças não destrutivas (ex.: criar `_v2` em vez de dropar função). Salve uma cópia em `supabase/migrations/`.
@@ -45,10 +45,12 @@ Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele
 - Sábado sem jornada: segue a regra normal (2h banco + resto pago), a confirmar com o Rafael se mudar.
 - Tipos de dia (`day_status`): normal, feriado, folga, férias, atestado (zeram a jornada prevista).
 - Dias antes de `profiles.inicio` não contam; dia de hoje só conta quando fechado (número par de marcações).
+- **Lançamentos manuais** (`banco_lancamentos`: dia, minutos ±, motivo; remoção lógica com `removido`): entram direto no banco, sem tolerância nem limite diário. Usados para o saldo anterior ao app (data = dia anterior ao `inicio`) e para horas pagas/compensadas. Gestor lança no Histórico da pessoa; tudo gera linha em `historico` (`banco` / `banco_removido`).
+- Banco acumulado = soma diária desde `inicio` + todos os lançamentos até hoje (`extrato()` no front). Banco do mês inclui os lançamentos com data no mês.
 
 ## Relatórios
 
-Excel (SheetJS 0.18.5) com abas Resumo (equipe), Espelho por pessoa, Marcações (coordenadas + link do mapa) e Ajustes. PDF (jsPDF 2.5.1 + autotable 3.8.2), A4 paisagem, uma pessoa por página, com campos de assinatura.
+Excel (SheetJS 0.18.5) com abas Resumo (equipe), Espelho por pessoa, Marcações (coordenadas + link do mapa) e Ajustes. Espelho e PDF terminam com o extrato do banco: saldo anterior + dias do período + lançamentos = saldo final. PDF (jsPDF 2.5.1 + autotable 3.8.2), A4 paisagem, uma pessoa por página, com campos de assinatura.
 
 ## Como testar antes de publicar
 
