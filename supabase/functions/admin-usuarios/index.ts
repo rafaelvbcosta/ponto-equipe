@@ -24,6 +24,7 @@ const emailOk = (e: unknown) => typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s
 const senhaOk = (p: unknown) => typeof p === 'string' && p.length >= 8 && p.length <= 72;
 const nomeOk = (n: unknown) => typeof n === 'string' && n.trim().length >= 2 && n.trim().length <= 120;
 const jornadaOk = (j: unknown) => Array.isArray(j) && j.length === 7 && j.every((x) => Number.isInteger(x) && x >= 0 && x <= 1440);
+const entradaOk = (j: unknown) => Array.isArray(j) && j.length === 7 && j.every((x) => Number.isInteger(x) && x >= 0 && x <= 1439);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -59,12 +60,13 @@ Deno.serve(async (req) => {
     if (!me || me.role !== 'gestor' || !me.ativo) return json({ erro: 'Apenas gestores podem fazer isso.' }, 403);
 
     if (acao === 'criar') {
-      const { nome, email, senha, matricula, role, jornada, inicio, fuso } = body;
+      const { nome, email, senha, matricula, role, jornada, inicio, fuso, entrada } = body;
       if (!nomeOk(nome) || !emailOk(email) || !senhaOk(senha)) return json({ erro: 'Preencha nome, e-mail válido e senha com pelo menos 8 caracteres.' }, 400);
       if (role && role !== 'colaborador' && role !== 'gestor') return json({ erro: 'Perfil inválido.' }, 400);
       if (jornada && !jornadaOk(jornada)) return json({ erro: 'Jornada inválida.' }, 400);
       if (inicio && !/^\d{4}-\d{2}-\d{2}$/.test(inicio)) return json({ erro: 'Data de início inválida.' }, 400);
       if (fuso && !FUSOS.includes(fuso)) return json({ erro: 'Fuso inválido.' }, 400);
+      if (entrada && !entradaOk(entrada)) return json({ erro: 'Horário de entrada inválido.' }, 400);
       const { data, error } = await admin.auth.admin.createUser({ email: email.trim().toLowerCase(), password: senha, email_confirm: true });
       if (error || !data?.user) {
         const msg = /already|registered|exists/i.test(error?.message || '') ? 'Já existe uma conta com este e-mail.' : (error?.message || 'Falha ao criar usuário.');
@@ -77,6 +79,7 @@ Deno.serve(async (req) => {
       if (jornada) row.jornada = jornada;
       if (inicio) row.inicio = inicio;
       if (fuso) row.fuso = fuso;
+      if (entrada) row.entrada = entrada;
       const { error: pe } = await admin.from('profiles').insert(row);
       if (pe) { await admin.auth.admin.deleteUser(data.user.id); return json({ erro: pe.message }, 500); }
       return json({ ok: true, id: data.user.id });

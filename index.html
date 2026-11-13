@@ -99,9 +99,9 @@ input,select,textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);ba
 textarea{min-height:68px;resize:vertical}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.wk{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-.wk .it{display:flex;align-items:center;gap:8px}
-.wk .it span{width:34px;font-size:13px;font-weight:800;color:var(--muted)}
+.wk{display:grid;grid-template-columns:38px 1fr 1fr;gap:6px 8px;align-items:center;margin-top:6px}
+.wk .d{font-size:13px;font-weight:800;color:var(--muted)}
+.wk .h{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
 .seg button{flex:1;border:0;background:none;font:inherit;font-weight:800;font-size:14px;padding:9px;border-radius:9px;color:var(--muted);cursor:pointer}
 .seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
@@ -195,6 +195,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <button class="btn-punch" id="btn-punch">Registrar entrada<span class="sub">&nbsp;</span></button>
       <div class="gps" id="h-gps"></div>
     </div>
+    <div class="card" id="h-lemb" hidden></div>
     <div class="stats">
       <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="h-worked">0:00</div></div>
       <div class="stat"><div class="k">Jornada</div><div class="v num" id="h-exp">0:00</div></div>
@@ -314,6 +315,9 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <div class="note" style="margin-top:6px">Em dias com mais de 6h trabalhadas, se o intervalo não for marcado ou for menor que o mínimo, a diferença é descontada automaticamente (CLT art. 71). Use 0 para desligar.</div>
       <label class="chk"><input type="checkbox" id="cfg-fer"> Considerar feriados nacionais automaticamente</label>
       <label class="chk"><input type="checkbox" id="cfg-gps"> Exigir localização para registrar o ponto</label>
+      <label class="chk"><input type="checkbox" id="cfg-lemb"> Enviar lembretes de marcação no início e no fim do horário</label>
+      <label class="f" for="cfg-lmin">Enviar o lembrete quantos minutos depois do horário</label><input id="cfg-lmin" type="number" min="0" max="60" inputmode="numeric">
+      <div class="note" style="margin-top:6px">Cada pessoa ativa os lembretes no próprio celular, em Conta. Só avisa quem ainda não marcou a entrada (ou está com a jornada aberta na hora da saída). Não avisa em dias sem jornada, feriados, folgas, férias e atestados.</div>
       <div class="note" style="margin-top:8px">Feriados estaduais/municipais e pontos facultativos: ajuste o “tipo do dia” na pessoa. Diferenças de até a tolerância no dia não entram no saldo (CLT art. 58 §1º prevê até 10 min).</div>
       <button class="btn primary full" style="margin-top:12px" id="cfg-save">Salvar configurações</button>
     </div>
@@ -325,6 +329,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <h2 id="c-nome"></h2>
       <div class="note" id="c-info"></div>
     </div>
+    <div class="card" id="c-lemb"></div>
     <form class="card" id="f-pw2">
       <h2>Trocar senha</h2>
       <label class="f" for="cp1" style="margin-top:0">Nova senha (mín. 8 caracteres)</label><input id="cp1" type="password" minlength="8" required autocomplete="new-password">
@@ -422,7 +427,7 @@ function holiday(k){
 
 // ================= ESTADO =================
 const S = {
-  session:null, me:null, cfg:{tolerancia:10, feriados_nac:true, exigir_gps:false, empresa:'', intervalo_min:60, limite_banco_dia:120}, locais:[], team:[],
+  session:null, me:null, cfg:{tolerancia:10, feriados_nac:true, exigir_gps:false, empresa:'', intervalo_min:60, limite_banco_dia:120, lembretes:true, lembrete_min:5}, locais:[], team:[],
   teamToday:{}, pending:[], myReqs:[], view:'hoje', month:null, target:null, rMode:'month', lastKey:null, gpsState:''
 };
 const C = {};
@@ -567,15 +572,16 @@ function screen(id){ document.querySelectorAll('.screen').forEach(s => s.classLi
 function setBusyBtn(btn, on, label){ if (!btn) return; if (on){ btn.dataset.l = btn.innerHTML; btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${label || 'Aguarde…'}`; } else { btn.disabled = false; if (btn.dataset.l) btn.innerHTML = btn.dataset.l; } }
 
 // ================= AUTENTICAÇÃO =================
-async function callAdmin(body){
+async function callFn(name, body){
   const {data:{session}} = await sb.auth.getSession();
   const headers = {'Content-Type':'application/json', apikey:SB_KEY};
   if (session?.access_token) headers.Authorization = 'Bearer ' + session.access_token;
-  const r = await fetch(`${SB_URL}/functions/v1/admin-usuarios`, {method:'POST', headers, body:JSON.stringify(body)});
+  const r = await fetch(`${SB_URL}/functions/v1/${name}`, {method:'POST', headers, body:JSON.stringify(body)});
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok || j.erro) throw new Error(j.erro || `Erro ${r.status}`);
   return j;
 }
+const callAdmin = body => callFn('admin-usuarios', body);
 async function showLogin(){
   screen('scr-login');
   try {
@@ -606,6 +612,7 @@ async function enterApp(){
     await Promise.all([ensureRange(S.me.id, S.me.inicio < S.month + '-01' ? S.me.inicio : S.month + '-01', todayKey()), loadMyReqs(), isG() ? loadPending() : null]);
   } catch (e){ showBanner('Não consegui carregar todos os dados: ' + errMsg(e)); }
   route();
+  pushInit().then(() => render());
 }
 
 // ================= NAVEGAÇÃO =================
@@ -681,6 +688,7 @@ function renderToday(){
   const pe = $('h-pending');
   if (acc.odd.length){ pe.hidden = false; pe.textContent = `Atenção: ${acc.odd.length} dia(s) com número ímpar de marcações (${acc.odd.slice(-5).map(fmtDM).join(', ')}). Abra o dia no Histórico e solicite o ajuste.`; }
   else pe.hidden = true;
+  renderLembConvite();
 }
 function getPos(){
   return new Promise(res => {
@@ -1096,13 +1104,17 @@ function renderAdmin(){
   $('loc-list').innerHTML = S.locais.map(l => `<li class="li" style="cursor:default"><div><div class="main">${esc(l.nome)}</div><div class="sub"><a href="https://www.google.com/maps?q=${l.lat},${l.lng}" target="_blank" rel="noopener">${l.lat.toFixed(5)}, ${l.lng.toFixed(5)}</a> · raio ${l.raio_m} m</div></div><button class="btn sm danger" data-del-loc="${l.id}">Excluir</button></li>`).join('') || '<li class="empty">Nenhum local cadastrado.</li>';
   $('cfg-emp').value = S.cfg.empresa || ''; $('cfg-tol').value = S.cfg.tolerancia ?? 10; $('cfg-int').value = S.cfg.intervalo_min ?? 60; $('cfg-lim').value = S.cfg.limite_banco_dia ?? 120;
   $('cfg-fer').checked = S.cfg.feriados_nac !== false; $('cfg-gps').checked = !!S.cfg.exigir_gps;
+  $('cfg-lemb').checked = S.cfg.lembretes !== false; $('cfg-lmin').value = S.cfg.lembrete_min ?? 5;
 }
-function jornadaInputs(j){
-  return `<div class="wk">${[1,2,3,4,5,6,0].map(i => `<div class="it"><span>${WD[i]}</span><input type="time" id="uj-${i}" value="${minToT(Number(j[i]) || 0)}" aria-label="Jornada ${WDL[i]}"></div>`).join('')}</div>`;
+function horarioInputs(j, e){
+  return `<div class="wk"><span></span><span class="h">Entrada</span><span class="h">Jornada</span>${[1,2,3,4,5,6,0].map(i => `<span class="d">${WD[i]}</span>
+    <input type="time" id="ue-${i}" value="${minToT(entradaDe(e, i))}" aria-label="Entrada ${WDL[i]}">
+    <input type="time" id="uj-${i}" value="${minToT(Number(j[i]) || 0)}" aria-label="Jornada ${WDL[i]}">`).join('')}</div>`;
 }
 const readJornada = () => [0,1,2,3,4,5,6].map(i => { const v = ($('uj-' + i).value || '').slice(0, 5); return validT(v) ? toMin(v) : 0; });
+const readEntrada = () => [0,1,2,3,4,5,6].map(i => { const v = ($('ue-' + i).value || '').slice(0, 5); return validT(v) ? toMin(v) : 480; });
 function openUser(id){
-  const p = id ? S.team.find(x => x.id === id) : {nome:'', email:'', matricula:'', role:'colaborador', ativo:true, jornada:[0,480,480,480,480,480,0], inicio:todayKey(), fuso:'America/Sao_Paulo'};
+  const p = id ? S.team.find(x => x.id === id) : {nome:'', email:'', matricula:'', role:'colaborador', ativo:true, jornada:[0,480,480,480,480,480,0], entrada:[480,480,480,480,480,480,480], inicio:todayKey(), fuso:'America/Sao_Paulo'};
   SH = null;
   $('sheet').innerHTML = `<div class="grab"></div>
     <div class="row-between"><h2 style="margin:0">${id ? 'Editar usuário' : 'Nova conta'}</h2><button class="link" data-act="close">Fechar</button></div>
@@ -1112,7 +1124,8 @@ function openUser(id){
       <div><label class="f" for="u-role">Perfil</label><select id="u-role"><option value="colaborador"${p.role === 'colaborador' ? ' selected' : ''}>Colaborador</option><option value="gestor"${p.role === 'gestor' ? ' selected' : ''}>Gestor</option></select></div></div>
     <div class="grid2"><div><label class="f" for="u-ini">Início do controle</label><input id="u-ini" type="date" value="${esc(p.inicio)}"></div>
       <div><label class="f" for="u-fuso">Fuso horário</label><select id="u-fuso">${Object.entries(FUSOS).map(([v, l]) => `<option value="${v}"${p.fuso === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div></div>
-    <label class="f">Jornada prevista por dia (00:00 = sem expediente)</label>${jornadaInputs(p.jornada)}
+    <label class="f">Horário por dia (jornada 00:00 = sem expediente)</label>${horarioInputs(p.jornada, p.entrada)}
+    <div class="note" style="margin-top:6px">A entrada é usada nos lembretes. Saída prevista = entrada + jornada + intervalo mínimo (quando a jornada passa de 6h).</div>
     ${id ? `<label class="chk"><input type="checkbox" id="u-ativo"${p.ativo ? ' checked' : ''}> Usuário ativo (pode entrar e marcar ponto)</label>`
          : `<label class="f" for="u-pass">Senha temporária</label><div style="display:flex;gap:8px"><input id="u-pass" value="${randomPass()}"><button class="btn sm" data-act="regen">Gerar</button></div>`}
     <button class="btn primary full" style="margin-top:14px" data-act="${id ? 'save-user' : 'create-user'}" data-id="${id || ''}">${id ? 'Salvar' : 'Criar conta'}</button>
@@ -1123,8 +1136,8 @@ function openUser(id){
 async function saveUser(id, btn){
   const nome = $('u-nome').value.trim(); if (nome.length < 2) return toast('Informe o nome.');
   setBusyBtn(btn, true, 'Salvando…');
-  const {error} = await sb.rpc('gestor_salvar_usuario_v2', {p_id:id, p_nome:nome, p_matricula:$('u-mat').value.trim(), p_role:$('u-role').value,
-    p_ativo:$('u-ativo').checked, p_jornada:readJornada(), p_inicio:$('u-ini').value || null, p_fuso:$('u-fuso').value});
+  const {error} = await sb.rpc('gestor_salvar_usuario_v3', {p_id:id, p_nome:nome, p_matricula:$('u-mat').value.trim(), p_role:$('u-role').value,
+    p_ativo:$('u-ativo').checked, p_jornada:readJornada(), p_inicio:$('u-ini').value || null, p_fuso:$('u-fuso').value, p_entrada:readEntrada()});
   if (error){ setBusyBtn(btn, false); return toast(errMsg(error), 5000); }
   for (const k of Object.keys(C)) if (k === id) delete C[k];
   await loadTeam(); closeSheet(); toast('Usuário atualizado.'); render();
@@ -1135,7 +1148,7 @@ async function createUser(btn){
   if (senha.length < 8) return toast('A senha temporária precisa ter pelo menos 8 caracteres.');
   setBusyBtn(btn, true, 'Criando…');
   try {
-    await callAdmin({acao:'criar', nome, email, senha, matricula:$('u-mat').value.trim(), role:$('u-role').value, jornada:readJornada(), inicio:$('u-ini').value || undefined, fuso:$('u-fuso').value});
+    await callAdmin({acao:'criar', nome, email, senha, matricula:$('u-mat').value.trim(), role:$('u-role').value, jornada:readJornada(), entrada:readEntrada(), inicio:$('u-ini').value || undefined, fuso:$('u-fuso').value});
     await loadTeam(); closeSheet(); render();
     await showCred('Conta criada', `Ponto Equipe\nLink: ${location.origin + location.pathname}\nE-mail: ${email.toLowerCase()}\nSenha temporária: ${senha}`);
   } catch (e){ toast(errMsg(e), 6000); setBusyBtn(btn, false); }
@@ -1170,7 +1183,7 @@ async function delLocal(id){
   S.locais = S.locais.filter(x => x.id !== id); render();
 }
 async function saveCfg(btn){
-  const upd = {empresa:$('cfg-emp').value.trim(), tolerancia:Math.max(0, Math.min(120, parseInt($('cfg-tol').value, 10) || 0)), intervalo_min:Math.max(0, Math.min(240, parseInt($('cfg-int').value, 10) || 0)), limite_banco_dia:Math.max(0, Math.min(720, parseInt($('cfg-lim').value, 10) || 0)), feriados_nac:$('cfg-fer').checked, exigir_gps:$('cfg-gps').checked, updated_at:new Date().toISOString()};
+  const upd = {empresa:$('cfg-emp').value.trim(), tolerancia:Math.max(0, Math.min(120, parseInt($('cfg-tol').value, 10) || 0)), intervalo_min:Math.max(0, Math.min(240, parseInt($('cfg-int').value, 10) || 0)), limite_banco_dia:Math.max(0, Math.min(720, parseInt($('cfg-lim').value, 10) || 0)), feriados_nac:$('cfg-fer').checked, exigir_gps:$('cfg-gps').checked, lembretes:$('cfg-lemb').checked, lembrete_min:Math.max(0, Math.min(60, parseInt($('cfg-lmin').value, 10) || 0)), updated_at:new Date().toISOString()};
   setBusyBtn(btn, true, 'Salvando…');
   const {data, error} = await sb.from('config').update(upd).eq('id', 1).select().maybeSingle();
   setBusyBtn(btn, false);
@@ -1184,6 +1197,7 @@ function renderConta(){
   const p = S.me;
   $('c-nome').textContent = p.nome;
   $('c-info').innerHTML = `${esc(p.email)}<br>${p.role === 'gestor' ? 'Gestor' : 'Colaborador'}${p.matricula ? ' · Matrícula ' + esc(p.matricula) : ''}<br>Fuso: ${esc(FUSOS[p.fuso] || p.fuso)} · Controle desde ${fmtDate(p.inicio)}`;
+  renderLembretes();
 }
 async function changePass(p1, p2, after){
   if (p1.length < 8) return toast('A senha precisa ter pelo menos 8 caracteres.');
@@ -1194,6 +1208,126 @@ async function changePass(p1, p2, after){
   S.me.trocar_senha = false;
   toast('Senha atualizada.');
   if (after) await after();
+}
+
+// ================= LEMBRETES (PUSH) =================
+const PUSH = {ok:'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window, sub:null, key:null};
+const LEMB_DISP = 'ponto-equipe-lemb-dispensado';
+const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const entradaDe = (e, i) => { const v = Number((e || [])[i]); return Number.isFinite(v) && v >= 0 && v < 1440 ? v : 480; };
+function saidaDe(p, i){ const j = Number(p.jornada?.[i]) || 0; return entradaDe(p.entrada, i) + j + (j > 360 ? Math.max(0, Number(S.cfg.intervalo_min ?? 60) || 0) : 0); }
+function horarioTxt(p){
+  const dias = [1,2,3,4,5,6,0].filter(i => Number(p.jornada?.[i]) > 0);
+  if (!dias.length) return 'Sem dias de trabalho cadastrados.';
+  const grupos = [];
+  for (const i of dias){
+    const e = entradaDe(p.entrada, i), s = saidaDe(p, i), g = grupos[grupos.length - 1];
+    const prev = g && [1,2,3,4,5,6,0][[1,2,3,4,5,6,0].indexOf(i) - 1];
+    if (g && g.e === e && g.s === s && g.ult === prev) { g.ult = i; } else grupos.push({ini:i, ult:i, e, s});
+  }
+  return grupos.map(g => `${WD[g.ini]}${g.ult !== g.ini ? ' a ' + WD[g.ult] : ''} ${minToT(g.e)} → ${g.s < 1440 ? minToT(g.s) : minToT(g.s - 1440) + ' (dia seguinte)'}`).join(' · ');
+}
+function b64uBytes(s){ s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const b = atob(s); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+function keyEq(sub, k){ try { const a = new Uint8Array(sub.options.applicationServerKey), b = b64uBytes(k); return a.length === b.length && a.every((x, i) => x === b[i]); } catch (e) { return true; } }
+async function vapidKey(){
+  if (PUSH.key) return PUSH.key;
+  const {data, error} = await sb.rpc('vapid_publica');
+  if (!error && data) return (PUSH.key = data);
+  const j = await callFn('lembretes', {acao:'chave'});
+  return (PUSH.key = j.publica);
+}
+async function pushSalvar(sub){
+  const j = sub.toJSON();
+  const {error} = await sb.rpc('push_salvar', {p_endpoint:j.endpoint, p_p256dh:j.keys.p256dh, p_auth:j.keys.auth, p_ua:navigator.userAgent.slice(0, 200)});
+  if (error) throw error;
+}
+// Ao entrar: se este aparelho já tem inscrição e permissão, associa ao usuário logado (troca de usuário, renovação da inscrição)
+async function pushInit(){
+  if (!PUSH.ok) return;
+  try {
+    const reg = await navigator.serviceWorker.register('sw.js');
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && Notification.permission === 'granted' && S.cfg.lembretes !== false){
+      const key = await vapidKey();
+      if (!keyEq(sub, key)){ await sub.unsubscribe(); sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uBytes(key)}); }
+      await pushSalvar(sub);
+    }
+    PUSH.sub = Notification.permission === 'granted' ? sub : null;
+  } catch (e) { PUSH.sub = null; }
+}
+function pushEstado(){
+  if (S.cfg.lembretes === false) return 'cfg';
+  if (!PUSH.ok) return isIOS() && !standalone() ? 'ios' : 'nao';
+  if (Notification.permission === 'denied') return 'negado';
+  return PUSH.sub && Notification.permission === 'granted' ? 'on' : 'off';
+}
+async function ativarLembretes(btn){
+  if (!PUSH.ok){ toast(isIOS() && !standalone() ? 'No iPhone, instale o app na Tela de Início e ative os lembretes por lá.' : 'Este navegador não suporta notificações.', 6000); return go('conta'); }
+  let perm = Notification.permission;
+  try { if (perm === 'default') perm = await Notification.requestPermission(); } catch (e) {}
+  if (perm !== 'granted'){ render(); return toast('Sem permissão para notificações. Libere nas configurações do navegador para este site.', 6000); }
+  setBusyBtn(btn, true, 'Ativando…');
+  try {
+    const reg = await navigator.serviceWorker.register('sw.js');
+    await navigator.serviceWorker.ready;
+    const key = await vapidKey();
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && !keyEq(sub, key)){ await sub.unsubscribe(); sub = null; }
+    if (!sub) sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uBytes(key)});
+    await pushSalvar(sub);
+    PUSH.sub = sub;
+    toast('Lembretes ativados neste aparelho.');
+  } catch (e){ toast('Não foi possível ativar os lembretes: ' + errMsg(e), 6000); }
+  finally { setBusyBtn(btn, false); render(); }
+}
+async function desativarLembretes(btn){
+  setBusyBtn(btn, true, '');
+  try {
+    const sub = PUSH.sub;
+    if (sub){ const {error} = await sb.rpc('push_remover', {p_endpoint:sub.endpoint}); if (error) throw error; await sub.unsubscribe().catch(() => {}); }
+    PUSH.sub = null;
+    toast('Lembretes desativados neste aparelho.');
+  } catch (e){ toast(errMsg(e), 5000); }
+  finally { setBusyBtn(btn, false); render(); }
+}
+async function testarLembrete(btn){
+  setBusyBtn(btn, true, 'Enviando…');
+  try {
+    const j = await callFn('lembretes', {acao:'teste'});
+    if (j.enviados) toast('Notificação de teste enviada. Deve chegar em alguns segundos.', 5000);
+    else { PUSH.sub = null; await pushInit(); toast('Não chegou a nenhum aparelho. Toque em “Ativar” de novo.', 6000); }
+  } catch (e){ toast(errMsg(e), 6000); }
+  finally { setBusyBtn(btn, false); render(); }
+}
+async function pushSair(){
+  if (!PUSH.sub) return;
+  try { await Promise.race([sb.rpc('push_remover', {p_endpoint:PUSH.sub.endpoint}), new Promise(r => setTimeout(r, 3000))]); } catch (e) {}
+}
+const LEMB_MSG = {
+  cfg:'Os lembretes estão desligados pelo gestor.',
+  nao:'Este navegador não recebe notificações. No Android use o Chrome; no iPhone, o app instalado na Tela de Início.',
+  ios:'No iPhone os lembretes só funcionam com o app instalado: no Safari, toque em Compartilhar → “Adicionar à Tela de Início”, abra o Ponto pela tela inicial e ative aqui.',
+  negado:'As notificações estão bloqueadas para este app. Libere nas configurações do celular (iPhone: Ajustes → Notificações → Ponto; Android: informações do app ou do site → Notificações) e volte aqui.'
+};
+function renderLembretes(){
+  const st = pushEstado(), p = S.me, min = Number(S.cfg.lembrete_min ?? 5);
+  const acoes = st === 'on' ? `<div class="banner info" style="margin:12px 0 0">Ativos neste aparelho.</div>
+      <div class="btn-row" style="margin-top:10px"><button class="btn" data-lemb="teste">Enviar teste</button><button class="btn danger" data-lemb="off">Desativar</button></div>`
+    : st === 'off' ? `<button class="btn primary full" style="margin-top:12px" data-lemb="on">Ativar lembretes neste aparelho</button>`
+    : `<div class="banner" style="margin:12px 0 0">${esc(LEMB_MSG[st])}</div>`;
+  $('c-lemb').innerHTML = `<h2>Lembretes de ponto</h2>
+    <div class="note">Aviso no celular no início e no fim do seu horário${min ? `, ${min} min depois` : ''}, só se você ainda não tiver marcado.<br><b>Seu horário:</b> ${esc(horarioTxt(p))}</div>${acoes}`;
+}
+function renderLembConvite(){
+  const el = $('h-lemb'); if (!el) return;
+  let disp = false; try { disp = localStorage.getItem(LEMB_DISP) === '1'; } catch (e) {}
+  const st = pushEstado(), temJornada = (S.me.jornada || []).some(x => x > 0);
+  const show = !disp && temJornada && (st === 'off' || st === 'ios');
+  el.hidden = !show;
+  if (!show) return;
+  el.innerHTML = `<h2>Não esqueça de marcar o ponto</h2><div class="note">Receba um lembrete no celular no início e no fim do seu horário, se ainda não tiver marcado.</div>
+    <div class="btn-row" style="margin-top:12px"><button class="btn" data-lemb="dispensar">Agora não</button><button class="btn primary" data-lemb="${st === 'ios' ? 'conta' : 'on'}">${st === 'ios' ? 'Como ativar' : 'Ativar lembretes'}</button></div>`;
 }
 
 // ================= EVENTOS =================
@@ -1224,7 +1358,16 @@ function bind(){
     const t = e.target;
     const tab = t.closest('#tabs button'); if (tab) return go(tab.dataset.v);
     const g = t.closest('[data-go]'); if (g) return go(g.dataset.go);
-    if (t.closest('[data-logout]')){ await sb.auth.signOut(); location.hash = ''; location.reload(); return; }
+    if (t.closest('[data-logout]')){ await pushSair(); await sb.auth.signOut(); location.hash = ''; location.reload(); return; }
+    const lb = t.closest('[data-lemb]');
+    if (lb){
+      const a = lb.dataset.lemb;
+      if (a === 'on') return ativarLembretes(lb);
+      if (a === 'off') return desativarLembretes(lb);
+      if (a === 'teste') return testarLembrete(lb);
+      if (a === 'conta') return go('conta');
+      if (a === 'dispensar'){ try { localStorage.setItem(LEMB_DISP, '1'); } catch (e) {} $('h-lemb').hidden = true; toast('Você pode ativar depois em Conta.'); return; }
+    }
     const day = t.closest('#m-days [data-k]'); if (day) return openDay(histUid(), day.dataset.k);
     const myr = t.closest('#my-reqs [data-open]'); if (myr) return openDay(S.me.id, myr.dataset.open);
     const mem = t.closest('[data-member]'); if (mem){ S.target = mem.dataset.member; S.month = todayKey().slice(0, 7); return go('historico'); }
@@ -1295,6 +1438,7 @@ function tick(){
   const tk = todayKey(); S.month = tk.slice(0, 7);
   $('r-month').value = S.month; $('r-from').value = S.month + '-01'; $('r-to').value = tk; $('pick-date').value = tk;
   bind(); tick(); setInterval(tick, 1000);
+  try { navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.go && S.me) go(e.data.go); }); } catch (e) {}
   sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT'){ S.me = null; for (const k of Object.keys(C)) delete C[k]; showLogin(); } });
   try {
     const {data:{session}} = await sb.auth.getSession();

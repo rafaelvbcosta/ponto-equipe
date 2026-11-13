@@ -75,10 +75,10 @@ Deno.serve(async (req) => {
     if (acao === 'enviar') {
       const { data: ok } = await admin.rpc('_lembretes_token_ok', { p_token: req.headers.get('x-cron-token') || '' });
       if (ok !== true) return json({ erro: 'Não autorizado.' }, 401);
+      const keys = await chaves(admin);
       const { data: devidos, error } = await admin.rpc('_lembretes_reservar');
       if (error) return json({ erro: error.message }, 500);
       if (!devidos?.length) return json({ ok: true, lembretes: 0 });
-      const keys = await chaves(admin);
       const res = await Promise.all(devidos.map((d: { user_id: string; tipo: string; hora: string }) =>
         enviarPara(admin, keys, d.user_id, MSG[d.tipo](hhmm(d.hora))).catch(() => ({ enviados: 0, falhas: 1, aparelhos: 0 }))));
       return json({ ok: true, lembretes: devidos.length, enviados: res.reduce((n, r) => n + r.enviados, 0), falhas: res.reduce((n, r) => n + r.falhas, 0) });

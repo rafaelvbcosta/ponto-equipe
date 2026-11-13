@@ -1,5 +1,6 @@
 -- Lembretes de marcação por push (início e fim do horário)
--- Aplicado no banco como migration "lembretes_push".
+-- Aplicado pelo SQL Editor do painel (não aparece em list_migrations).
+
 --
 -- Como funciona:
 --  * profiles.entrada: horário de entrada por dia da semana (minutos desde 00:00, índice 0 = domingo).

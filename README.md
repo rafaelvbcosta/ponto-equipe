@@ -12,6 +12,7 @@ Registro de ponto eletrônico da equipe, com localização (GPS) em cada marcaç
 | Colaborador | Marca o ponto (horário do servidor + GPS), vê o histórico e o banco de horas, solicita ajustes (incluir, alterar ou remover marcação, ou mudar o tipo do dia) e gera o próprio relatório. |
 | Gestor | Vê a equipe em tempo real, aprova ou rejeita solicitações, ajusta diretamente qualquer dia, cria contas e redefine senhas, cadastra locais (minas, escritório) e gera relatórios individuais ou da equipe. |
 
+- **Lembretes:** cada pessoa pode ativar, em Conta, um aviso no celular no início e no fim do horário (definido pelo gestor no cadastro). O aviso só chega se ela ainda não marcou e não é enviado em feriados, folgas, férias e atestados. No iPhone, é preciso instalar o app na Tela de Início.
 - O horário de cada marcação é definido pelo servidor, no fuso de cada colaborador. Não dá para marcar com horário inventado.
 - Ninguém altera o ponto diretamente pela API: tudo passa por funções que validam permissões e gravam um histórico de alterações.
 - Cada colaborador só enxerga os próprios dados (Row Level Security).

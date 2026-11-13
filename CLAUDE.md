@@ -7,10 +7,10 @@ App de ponto eletrônico da equipe técnica do Rafael (GroundProbe Brasil). Resp
 | Parte | Onde |
 |---|---|
 | Front-end | `index.html` (página única, sem build). Publicado pelo GitHub Pages a partir da branch `main`, raiz: https://rafaelvbcosta.github.io/ponto-equipe/ |
-| PWA | `manifest.webmanifest`, `icon.svg`, `icon-192.png`, `icon-512.png` |
+| PWA | `manifest.webmanifest`, `icon.svg`, `icon-192.png`, `icon-512.png`, `sw.js` (service worker só para push; sem cache) |
 | Back-end | Supabase, projeto `ponto-equipe`, id `wxqynubloybfmhozexpb`, região `sa-east-1`, org "BuscAqui" (plano free) |
 | SQL | `supabase/migrations/` (cópia do que foi aplicado; a fonte da verdade é o banco: `list_migrations` / `execute_sql`) |
-| Edge Function | `supabase/functions/admin-usuarios/index.ts` (deploy com `verify_jwt: false`; autentica no código) |
+| Edge Functions | `supabase/functions/admin-usuarios/index.ts` e `supabase/functions/lembretes/` (`index.ts` + `webpush.ts`); deploy com `verify_jwt: false` (autenticam no código) |
 
 Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele.
 
@@ -18,10 +18,22 @@ Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele
 
 - O front usa a chave *publishable*; toda a segurança está em RLS + funções `security definer`.
 - Tabelas só têm políticas de SELECT (exceto `config` e `locais` para gestor). **Nenhuma escrita direta em `punches`, `requests`, `day_status`, `historico`**: tudo passa por RPC.
-- RPCs: `registrar_ponto` (horário do servidor, no `profiles.fuso`; bloqueia repetição em menos de 2 min sem `p_forcar`), `solicitar_ajuste`, `cancelar_solicitacao`, `revisar_solicitacao` (gestor), `gestor_ajuste` (gestor, aplica direto), `gestor_salvar_usuario_v2`, `senha_trocada`, `existe_gestor` (anon).
+- RPCs: `registrar_ponto` (horário do servidor, no `profiles.fuso`; bloqueia repetição em menos de 2 min sem `p_forcar`), `solicitar_ajuste`, `cancelar_solicitacao`, `revisar_solicitacao` (gestor), `gestor_ajuste` (gestor, aplica direto), `gestor_salvar_usuario_v3` (v2 ainda existe), `senha_trocada`, `existe_gestor` (anon), `push_salvar`, `push_remover`, `vapid_publica`.
 - `_aplicar_ajuste` é interna (sem execute para ninguém) e grava em `historico`. Marcações nunca são apagadas: `removido = true`; alteração guarda `hora_original`.
 - Contas são criadas pela Edge Function (`criar`, `senha`). `bootstrap` só funciona enquanto não existe nenhum gestor. Cadastro público do Supabase Auth está **desligado**.
 - Mudanças de schema: sempre por `apply_migration`, preferindo mudanças não destrutivas (ex.: criar `_v2` em vez de dropar função). Salve uma cópia em `supabase/migrations/`.
+- O servidor MCP do Supabase pede confirmação para SQL com `delete`/`revoke` e, na sessão na nuvem, essa pergunta não chega ao Rafael (expira em 60 s). Nesses casos peça para ele rodar no SQL Editor. A migration `20261113120000_lembretes_push.sql` foi aplicada assim e por isso não aparece em `list_migrations`.
+
+## Lembretes de marcação (push)
+
+- `profiles.entrada` (int[7], minutos, índice 0 = domingo, padrão 08:00): horário de entrada definido pelo gestor. Saída prevista = entrada + jornada + `config.intervalo_min` (só se a jornada passa de 6h).
+- `config.lembretes` (liga/desliga geral) e `config.lembrete_min` (envia X min depois do horário, padrão 5; janela de 1h).
+- Cada aparelho ativa em Conta → `push_salvar` grava em `push_subscriptions` (endpoint só de serviços conhecidos: FCM, Mozilla, Windows, Apple; até 5 por pessoa). Sair do app chama `push_remover`; inativar o usuário apaga as inscrições.
+- pg_cron `ponto-lembretes` (a cada minuto) roda `_lembretes_tick()`: se `_lembretes_candidatos()` tiver alguém, chama a Edge Function `lembretes` (`acao: enviar`, cabeçalho `x-cron-token` = segredo `lembretes_cron_token` do Vault). A função reserva com `_lembretes_reservar()` (tabela `lembretes_enviados`, uma vez por pessoa/dia/tipo) e envia o push. Inscrição que responde 404/410 é apagada.
+- Regras: entrada só se não há marcação no dia; saída só se o número de marcações é ímpar. Nada em dia sem jornada, feriado nacional (`_feriado_nacional`, se `feriados_nac`), `day_status` diferente de normal, antes de `inicio`, usuário inativo.
+- Chaves VAPID no Vault (`vapid_publica`, `vapid_privada`), geradas pela própria Edge Function na primeira chamada. Não troque: invalidaria todas as inscrições.
+- Limpeza diária (`ponto-lembretes-limpeza`): `lembretes_enviados` com mais de 60 dias e `cron.job_run_details` com mais de 7 dias.
+- iPhone: só funciona com o app instalado na Tela de Início (iOS 16.4+). A Conta explica isso.
 
 ## Regras de cálculo (todas no front, função `calc()` do `index.html`)
 
@@ -41,7 +53,9 @@ Excel (SheetJS 0.18.5) com abas Resumo (equipe), Espelho por pessoa, Marcações
 ## Como testar antes de publicar
 
 - O sandbox não acessa `*.supabase.co` diretamente. Para testar a lógica do banco, use `execute_sql` com
-  `set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', true)` e `set local role authenticated` dentro de um bloco `do`, com usuários de teste (`teste.*@exemplo.invalid`) apagados ao final.
+  `set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', true)` e `set local role authenticated` dentro de um bloco `do`, com usuários de teste (`teste.*@exemplo.invalid`). Prefira terminar o bloco com `raise exception` contendo os resultados: tudo é desfeito e não precisa de `delete` (que pede confirmação).
+- Para chamar Edge Functions a partir do banco: `net.http_post(...)` e ler `net._http_response`.
+- `_lembretes_candidatos(p_agora)` aceita um horário fixo para testar cenários.
 - Para o front, rode o `index.html` no jsdom com um mock de `window.supabase` (servindo o mock no lugar do CDN do supabase-js) e as libs de xlsx/jspdf locais.
 - Verifique sempre `node --check` no script e gere um Excel/PDF de exemplo.
 - Publicar = commit + push em `main` (o Pages atualiza em 1–2 min).
