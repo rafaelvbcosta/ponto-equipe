@@ -40,9 +40,9 @@ Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele
 - Jornada por dia da semana em minutos (`profiles.jornada`, índice 0 = domingo). Padrão 8h seg–sex.
 - **Intervalo mínimo** (`config.intervalo_min`, 60): dia com mais de 6h trabalhadas sem intervalo marcado (ou com intervalo menor) tem a diferença descontada, sem deixar o dia abaixo de 6h.
 - **Tolerância** (`config.tolerancia`, 10 min): diferença diária de até X min vira zero.
-- **Banco x extra paga** (`config.limite_banco_dia`, 120): saldo positivo do dia vai para o banco até 2h; o excedente é "extra paga". Saldo negativo (falta/atraso) desconta do banco.
-- **Domingo e feriado** (nacional automático, ou dia marcado como "Feriado") sem jornada prevista: tudo que for trabalhado é **extra 100%**, não entra no banco.
-- Sábado sem jornada: segue a regra normal (2h banco + resto pago), a confirmar com o Rafael se mudar.
+- **Banco x extra paga** (`config.limite_banco_dia`, 120) — regra única definida pelo Rafael (13/11/2026): em **qualquer dia** (semana, sábado, domingo, feriado), as 2 primeiras horas extras do dia vão para o banco e o excedente é "extra paga". Saldo negativo (falta/atraso) desconta do banco.
+- **Domingo e feriado** (nacional automático, ou dia marcado como "Feriado") sem jornada prevista: a parte paga (o que passa das 2h) fica separada como `paga100` ("extra 100%") para o financeiro; não há mais "tudo extra 100%".
+- Extras pagas fecham por mês (Hoje e Histórico mostram o mês; o cartão "Resumo por mês" do Histórico guarda cada mês); o banco é acumulado.
 - Tipos de dia (`day_status`): normal, feriado, folga, férias, atestado (zeram a jornada prevista). Períodos (férias etc.) são lançados pelo gestor no Histórico da pessoa (cartão "Férias e afastamentos"); dias sem marcação não mexem no banco, trabalho nesses dias conta como extra, e não há lembrete.
 - Dias antes de `profiles.inicio` não contam; dia de hoje só conta quando fechado (número par de marcações).
 - **Lançamentos manuais** (`banco_lancamentos`: dia, minutos ±, motivo; remoção lógica com `removido`): entram direto no banco, sem tolerância nem limite diário. Usados para o saldo anterior ao app (data = dia anterior ao `inicio`) e para horas pagas/compensadas. Gestor lança no Histórico da pessoa; tudo gera linha em `historico` (`banco` / `banco_removido`).
