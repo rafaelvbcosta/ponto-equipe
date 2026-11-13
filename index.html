@@ -847,7 +847,7 @@ async function renderHist(){
   const keys = []; eachDay(first, last, k => { if (k <= tk || U(uid).punches[k] || U(uid).status[k]) keys.push(k); });
   keys.reverse();
   const sm = sumRange(uid, first, last < tk ? last : tk);
-  $('s-worked').textContent = fmtDur(sm.w); $('s-paga').textContent = fmtDur(sm.pg); $('s-p100').textContent = sm.p100 ? `+ ${fmtDur(sm.p100)} a 100%` : '';
+  $('s-worked').textContent = fmtDur(sm.w); $('s-paga').textContent = fmtDur(sm.pg + sm.p100); $('s-p100').textContent = sm.p100 ? `${fmtDur(sm.p100)} em dom./feriado (100%)` : '';
   const smb = sm.b + lancSum(uid, first, last < tk ? last : tk);
   $('s-saldo').textContent = fmtSaldo(smb); $('s-saldo').className = 'v num ' + cls(smb);
   const reqs = Object.values(U(uid).reqs);
@@ -1154,7 +1154,7 @@ async function renderReport(){
   if (my !== repToken) return;
   const Rs = uids.map(uid => buildReport(uid, P.from, P.to));
   const tot = Rs.reduce((a, r) => ({w:a.w + r.w, b:a.b + r.b + r.ex.lanc, pg:a.pg + r.pg, p100:a.p100 + r.p100, adj:a.adj + r.adj, ng:a.ng + r.nogps, f:a.f + r.faltas}), {w:0, b:0, pg:0, p100:0, adj:0, ng:0, f:0});
-  $('r-worked').textContent = fmtDur(tot.w); $('r-paga').textContent = fmtDur(tot.pg); $('r-p100').textContent = tot.p100 ? `+ ${fmtDur(tot.p100)} a 100%` : '';
+  $('r-worked').textContent = fmtDur(tot.w); $('r-paga').textContent = fmtDur(tot.pg + tot.p100); $('r-p100').textContent = tot.p100 ? `${fmtDur(tot.p100)} em dom./feriado (100%)` : '';
   $('r-saldo').textContent = fmtSaldo(tot.b); $('r-saldo').className = 'v num ' + cls(tot.b);
   $('r-info').textContent = `${fmtDate(P.from)} a ${fmtDate(P.to)} · ${uids.length > 1 ? uids.length + ' pessoas · ' : ''}${tot.f} falta(s) · ${tot.adj} marcação(ões) ajustada(s) · ${tot.ng} sem GPS. ${Rs.length === 1 ? `Banco: saldo anterior ${fmtSaldo(Rs[0].ex.ant)}, saldo final ${fmtSaldo(Rs[0].ex.fim)}. ` : ''}O Excel inclui o espelho, todas as marcações com coordenadas e o histórico de ajustes.`;
 }
