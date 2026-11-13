@@ -54,6 +54,7 @@ Excel (SheetJS 0.18.5) com abas Resumo (equipe), Espelho por pessoa, Marcações
 
 - O sandbox não acessa `*.supabase.co` diretamente. Para testar a lógica do banco, use `execute_sql` com
   `set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', true)` e `set local role authenticated` dentro de um bloco `do`, com usuários de teste (`teste.*@exemplo.invalid`). Prefira terminar o bloco com `raise exception` contendo os resultados: tudo é desfeito e não precisa de `delete` (que pede confirmação).
+- Não deixe usuário de teste gravado (fora de transação desfeita): o `auth.users` criado por SQL só com id/email quebra o serviço de Auth ("Database error loading user") e o painel não consegue apagá-lo; só sai com `delete from auth.users ...` no SQL Editor.
 - Para chamar Edge Functions a partir do banco: `net.http_post(...)` e ler `net._http_response`.
 - `_lembretes_candidatos(p_agora)` aceita um horário fixo para testar cenários.
 - Para o front, rode o `index.html` no jsdom com um mock de `window.supabase` (servindo o mock no lugar do CDN do supabase-js) e as libs de xlsx/jspdf locais.
