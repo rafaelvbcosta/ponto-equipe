@@ -207,9 +207,10 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
     <div class="card">
       <h2>Banco de horas</h2>
       <div class="grid2">
-        <div><div class="note">Saldo do mês</div><div class="big num" id="h-month">0:00</div></div>
-        <div><div class="note">Acumulado desde <span id="h-since"></span></div><div class="big num" id="h-acc">0:00</div></div>
+        <div><div class="note">Banco no mês</div><div class="big num" id="h-month">0:00</div></div>
+        <div><div class="note">Banco acumulado desde <span id="h-since"></span></div><div class="big num" id="h-acc">0:00</div></div>
       </div>
+      <div class="note" style="margin-top:10px">Horas extras pagas no mês: <b class="num" id="h-paga">0:00</b> <span id="h-regra"></span></div>
       <div class="banner" id="h-pending" style="margin:12px 0 0" hidden></div>
     </div>
   </section>
@@ -227,8 +228,8 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
     </div>
     <div class="stats">
       <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="s-worked">0:00</div></div>
-      <div class="stat"><div class="k">Previsto</div><div class="v num" id="s-exp">0:00</div></div>
-      <div class="stat"><div class="k">Saldo</div><div class="v num" id="s-saldo">0:00</div></div>
+      <div class="stat"><div class="k">Banco</div><div class="v num" id="s-saldo">0:00</div></div>
+      <div class="stat"><div class="k">Extras pagas</div><div class="v num" id="s-paga">0:00</div></div>
     </div>
     <div class="card" style="padding:4px 12px"><ul class="list" id="m-days"></ul></div>
     <div class="card">
@@ -273,8 +274,8 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
     </div>
     <div class="stats">
       <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="r-worked">—</div></div>
-      <div class="stat"><div class="k">Previsto</div><div class="v num" id="r-exp">—</div></div>
-      <div class="stat"><div class="k">Saldo</div><div class="v num" id="r-saldo">—</div></div>
+      <div class="stat"><div class="k">Banco</div><div class="v num" id="r-saldo">—</div></div>
+      <div class="stat"><div class="k">Extras pagas</div><div class="v num" id="r-paga">—</div></div>
     </div>
     <div class="card">
       <div class="note" id="r-info">Calculando…</div>
@@ -306,7 +307,11 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
     <div class="card">
       <h2>Configurações gerais</h2>
       <label class="f" for="cfg-emp" style="margin-top:0">Empresa (aparece nos relatórios)</label><input id="cfg-emp">
-      <label class="f" for="cfg-tol">Tolerância diária (min)</label><input id="cfg-tol" type="number" min="0" max="120" inputmode="numeric">
+      <div class="grid2"><div><label class="f" for="cfg-tol">Tolerância diária (min)</label><input id="cfg-tol" type="number" min="0" max="120" inputmode="numeric"></div>
+      <div><label class="f" for="cfg-int">Intervalo mínimo (min)</label><input id="cfg-int" type="number" min="0" max="240" inputmode="numeric"></div></div>
+      <label class="f" for="cfg-lim">Máximo diário de horas extras para o banco (min)</label><input id="cfg-lim" type="number" min="0" max="720" inputmode="numeric">
+      <div class="note" style="margin-top:6px">Exemplo: 120 = as 2 primeiras horas extras do dia vão para o banco e o restante é pago. Faltas e atrasos sempre descontam do banco.</div>
+      <div class="note" style="margin-top:6px">Em dias com mais de 6h trabalhadas, se o intervalo não for marcado ou for menor que o mínimo, a diferença é descontada automaticamente (CLT art. 71). Use 0 para desligar.</div>
       <label class="chk"><input type="checkbox" id="cfg-fer"> Considerar feriados nacionais automaticamente</label>
       <label class="chk"><input type="checkbox" id="cfg-gps"> Exigir localização para registrar o ponto</label>
       <div class="note" style="margin-top:8px">Feriados estaduais/municipais e pontos facultativos: ajuste o “tipo do dia” na pessoa. Diferenças de até a tolerância no dia não entram no saldo (CLT art. 58 §1º prevê até 10 min).</div>
@@ -417,7 +422,7 @@ function holiday(k){
 
 // ================= ESTADO =================
 const S = {
-  session:null, me:null, cfg:{tolerancia:10, feriados_nac:true, exigir_gps:false, empresa:''}, locais:[], team:[],
+  session:null, me:null, cfg:{tolerancia:10, feriados_nac:true, exigir_gps:false, empresa:'', intervalo_min:60, limite_banco_dia:120}, locais:[], team:[],
   teamToday:{}, pending:[], myReqs:[], view:'hoje', month:null, target:null, rMode:'month', lastKey:null, gpsState:''
 };
 const C = {};
@@ -479,19 +484,33 @@ function calc(uid, k, live){
   const open = ps.length % 2 === 1;
   let liveW = worked;
   if (live && open && k === tk){ const a = toMin(ps[ps.length-1].t), n = nowMin(); if (n >= a) liveW += n - a; }
+  // Intervalo mínimo: jornada acima de 6h sem intervalo marcado (ou com intervalo menor) tem a diferença descontada
+  const minI = Math.max(0, Number(S.cfg.intervalo_min ?? 60) || 0);
+  const autoI = (w, gap) => (minI && w > 360 && gap < minI) ? Math.min(minI - gap, w - 360) : 0;
+  let autoInt = 0;
+  if (ps.length >= 2 && !open){
+    let span = toMin(ps[ps.length-1].t) - toMin(ps[0].t); if (span < 0) span += 1440;
+    autoInt = autoI(worked, Math.max(0, span - worked)); worked -= autoInt;
+  }
+  if (live && k === tk && ps.length){
+    let span = (open ? nowMin() : toMin(ps[ps.length-1].t)) - toMin(ps[0].t); if (span < 0) span += 1440;
+    liveW -= open ? autoI(liveW, Math.max(0, span - liveW)) : autoInt;
+  }
   const exp = expectedFor(uid, k), ini = profOf(uid)?.inicio || tk;
   let counts = k >= ini && k <= tk;
   if (k === tk && (open || (ps.length === 0 && exp > 0))) counts = false;
   let saldo = counts ? worked - exp : 0;
   if (counts && Math.abs(saldo) <= (Number(S.cfg.tolerancia) || 0)) saldo = 0;
+  const lim = Math.max(0, Number(S.cfg.limite_banco_dia ?? 120));
+  const banco = saldo > 0 ? Math.min(saldo, lim) : saldo, paga = saldo > 0 ? saldo - banco : 0;
   const st = U(uid).status[k];
-  return {ps, worked, live:liveW, exp, saldo, counts, open, type:st?.tipo || 'normal', obs:st?.obs || '',
+  return {ps, worked, live:liveW, exp, saldo, banco, paga, counts, open, autoInt, type:st?.tipo || 'normal', obs:st?.obs || '',
     edited:ps.some(p => p.origem !== 'app' || p.hora_original), noGps:ps.filter(p => p.origem === 'app' && p.lat == null).length};
 }
 function sumRange(uid, from, to){
-  const r = {w:0, e:0, s:0, odd:[], faltas:0}; const tk = todayKey();
+  const r = {w:0, e:0, s:0, b:0, pg:0, odd:[], faltas:0}; const tk = todayKey();
   if (!from || !to || from > to) return r;
-  eachDay(from, to, k => { const c = calc(uid, k); if (c.counts){ r.w += c.worked; r.e += c.exp; r.s += c.saldo; if (c.exp > 0 && !c.ps.length && c.type === 'normal') r.faltas++; } if (c.open && k < tk) r.odd.push(k); });
+  eachDay(from, to, k => { const c = calc(uid, k); if (c.counts){ r.w += c.worked; r.e += c.exp; r.s += c.saldo; r.b += c.banco; r.pg += c.paga; if (c.exp > 0 && !c.ps.length && c.type === 'normal') r.faltas++; } if (c.open && k < tk) r.odd.push(k); });
   return r;
 }
 function localOf(p){
@@ -650,8 +669,10 @@ function renderToday(){
     (pend ? `<li><span class="lbl">Ajustes aguardando aprovação</span><span class="tag">${pend}</span></li>` : '');
   const ini = S.me.inicio || tk, m0 = tk.slice(0, 8) + '01';
   const m = sumRange(uid, m0 > ini ? m0 : ini, tk), acc = sumRange(uid, ini, tk);
-  $('h-month').textContent = fmtSaldo(m.s); $('h-month').className = 'big num ' + cls(m.s);
-  $('h-acc').textContent = fmtSaldo(acc.s); $('h-acc').className = 'big num ' + cls(acc.s);
+  $('h-month').textContent = fmtSaldo(m.b); $('h-month').className = 'big num ' + cls(m.b);
+  $('h-acc').textContent = fmtSaldo(acc.b); $('h-acc').className = 'big num ' + cls(acc.b);
+  $('h-paga').textContent = fmtDur(m.pg);
+  $('h-regra').textContent = `(acima de ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))}/dia vai para pagamento)`;
   $('h-since').textContent = fmtDate(ini);
   const pe = $('h-pending');
   if (acc.odd.length){ pe.hidden = false; pe.textContent = `Atenção: ${acc.odd.length} dia(s) com número ímpar de marcações (${acc.odd.slice(-5).map(fmtDM).join(', ')}). Abra o dia no Histórico e solicite o ajuste.`; }
@@ -718,8 +739,8 @@ async function renderHist(){
   const keys = []; eachDay(first, last, k => { if (k <= tk || U(uid).punches[k] || U(uid).status[k]) keys.push(k); });
   keys.reverse();
   const sm = sumRange(uid, first, last < tk ? last : tk);
-  $('s-worked').textContent = fmtDur(sm.w); $('s-exp').textContent = fmtDur(sm.e);
-  $('s-saldo').textContent = fmtSaldo(sm.s); $('s-saldo').className = 'v num ' + cls(sm.s);
+  $('s-worked').textContent = fmtDur(sm.w); $('s-paga').textContent = fmtDur(sm.pg);
+  $('s-saldo').textContent = fmtSaldo(sm.b); $('s-saldo').className = 'v num ' + cls(sm.b);
   const reqs = Object.values(U(uid).reqs);
   $('m-days').innerHTML = keys.length ? keys.map(k => {
     const c = calc(uid, k), d = dateOf(k), np = c.ps.length, hol = holiday(k);
@@ -729,6 +750,8 @@ async function renderHist(){
     if (np && c.type !== 'normal') tags.push(`<span class="tag type">${esc(TYPES[c.type])}</span>`);
     if (c.open && k < tk) tags.push('<span class="tag">ímpar</span>');
     if (c.noGps) tags.push('<span class="tag info">sem GPS</span>');
+    if (c.autoInt) tags.push(`<span class="tag info">−${fmtDur(c.autoInt)} intervalo</span>`);
+    if (c.paga) tags.push(`<span class="tag type">${fmtDur(c.paga)} paga</span>`);
     const pend = reqs.filter(r => r.dia === k && r.status === 'pendente').length;
     if (pend) tags.push(`<span class="tag">${pend} pendente${pend > 1 ? 's' : ''}</span>`);
     return `<li class="day${c.exp === 0 && !np ? ' off' : ''}${k === tk ? ' today' : ''}" data-k="${k}">
@@ -769,7 +792,7 @@ function renderSheet(){
   $('sheet').innerHTML = `<div class="grab"></div>
     <div class="row-between"><div><h2 style="margin:0;text-transform:capitalize">${WDL[d.getDay()]}, ${fmtDate(k)}</h2>${uid !== S.me.id ? `<div class="note">${esc(nameOf(uid))}</div>` : ''}</div><button class="link" data-act="close">Fechar</button></div>
     ${ini && k < ini ? `<div class="banner" style="margin:10px 0 0">Data anterior ao início do controle (${fmtDate(ini)}): não entra no banco de horas.</div>` : ''}
-    <div class="note" style="margin-top:8px">${c.type !== 'normal' ? `<span class="tag type" style="margin-left:0">${esc(TYPES[c.type])}</span> ` : hol ? `<span class="tag type" style="margin-left:0">Feriado: ${esc(hol)}</span> ` : ''}${c.obs ? 'Obs.: ' + esc(c.obs) + ' · ' : ''}Trabalhado ${fmtDur(c.worked)} · Previsto ${fmtDur(c.exp)}${c.counts ? ` · Saldo <b class="${cls(c.saldo)}">${fmtSaldo(c.saldo)}</b>` : ''}</div>
+    <div class="note" style="margin-top:8px">${c.type !== 'normal' ? `<span class="tag type" style="margin-left:0">${esc(TYPES[c.type])}</span> ` : hol ? `<span class="tag type" style="margin-left:0">Feriado: ${esc(hol)}</span> ` : ''}${c.obs ? 'Obs.: ' + esc(c.obs) + ' · ' : ''}Trabalhado ${fmtDur(c.worked)}${c.autoInt ? ` (já descontado ${fmtDur(c.autoInt)} de intervalo)` : ''} · Previsto ${fmtDur(c.exp)}${c.counts ? ` · Saldo <b class="${cls(c.saldo)}">${fmtSaldo(c.saldo)}</b>${c.paga ? ` (banco ${fmtSaldo(c.banco)} + ${fmtDur(c.paga)} paga)` : ''}` : ''}</div>
     <h3>Marcações</h3>
     <ul class="timeline">${ps.length ? ps.map((p, i) => `<li><span><span class="lbl">${labelFor(i)}</span>
       ${p.hora_original ? `<span class="tag">era ${p.hora_original.slice(0, 5)}</span>` : ''}${p.origem === 'ajuste' ? '<span class="tag">incluída por ajuste</span>' : p.origem === 'gestor' ? '<span class="tag">lançada pelo gestor</span>' : ''}
@@ -895,23 +918,24 @@ function reportUids(){
   return v === 'todos' ? S.team.filter(p => p.ativo || p.id === S.me.id).map(p => p.id) : [v || S.me.id];
 }
 function buildReport(uid, from, to){
-  const tk = todayKey(), rows = []; let w = 0, e = 0, s = 0, adj = 0, nogps = 0, faltas = 0;
+  const tk = todayKey(), rows = []; let w = 0, e = 0, s = 0, b = 0, pg = 0, adj = 0, nogps = 0, faltas = 0;
   eachDay(from, to, k => {
     const c = calc(uid, k), d = dateOf(k), ps = c.ps, future = k > tk, hol = holiday(k);
-    const main = [0,1,2,3].map(i => ps[i] || null), ex = ps.slice(4), extras = [];
+    const main = ps.length === 2 ? [ps[0], null, null, ps[1]] : [0,1,2,3].map(i => ps[i] || null), ex = ps.slice(4), extras = [];
     for (let i = 0; i < ex.length; i += 2) extras.push(ex[i].t + (ex[i+1] ? '-' + ex[i+1].t : ''));
     const obs = [];
     if (c.type !== 'normal') obs.push(TYPES[c.type]); else if (hol) obs.push('Feriado: ' + hol); else if (!future && c.exp === 0 && !ps.length) obs.push('Descanso');
     if (c.counts && c.type === 'normal' && c.exp > 0 && !ps.length){ obs.push('Falta'); faltas++; }
     if (c.open && ps.length && k < tk) obs.push('Marcação ímpar');
+    if (c.autoInt) obs.push(`Intervalo descontado ${fmtDur(c.autoInt)}`);
     if (c.obs) obs.push(c.obs);
-    if (c.counts){ w += c.worked; e += c.exp; s += c.saldo; }
+    if (c.counts){ w += c.worked; e += c.exp; s += c.saldo; b += c.banco; pg += c.paga; }
     adj += ps.filter(p => p.origem !== 'app' || p.hora_original).length; nogps += c.noGps;
     const locs = [...new Set(ps.map(localOf))];
     rows.push({k, wd:WD[d.getDay()], main, extras:extras.join(' '), worked:ps.length ? c.worked : null, exp:c.counts ? c.exp : null,
-      saldo:c.counts ? c.saldo : null, obs:obs.join(' · '), locs:locs.join(' / '), edited:c.edited, off:c.exp === 0, ps});
+      saldo:c.counts ? c.saldo : null, banco:c.counts ? c.banco : null, paga:c.counts ? c.paga : null, obs:obs.join(' · '), locs:locs.join(' / '), edited:c.edited, off:c.exp === 0, ps});
   });
-  return {uid, from, to, rows, w, e, s, adj, nogps, faltas};
+  return {uid, from, to, rows, w, e, s, b, pg, adj, nogps, faltas};
 }
 let repToken = 0;
 async function renderReport(){
@@ -926,9 +950,9 @@ async function renderReport(){
   try { for (const uid of uids) await ensureRange(uid, P.from, P.to); } catch (e){ $('r-info').textContent = errMsg(e); return; }
   if (my !== repToken) return;
   const Rs = uids.map(uid => buildReport(uid, P.from, P.to));
-  const tot = Rs.reduce((a, r) => ({w:a.w + r.w, e:a.e + r.e, s:a.s + r.s, adj:a.adj + r.adj, ng:a.ng + r.nogps, f:a.f + r.faltas}), {w:0, e:0, s:0, adj:0, ng:0, f:0});
-  $('r-worked').textContent = fmtDur(tot.w); $('r-exp').textContent = fmtDur(tot.e);
-  $('r-saldo').textContent = fmtSaldo(tot.s); $('r-saldo').className = 'v num ' + cls(tot.s);
+  const tot = Rs.reduce((a, r) => ({w:a.w + r.w, b:a.b + r.b, pg:a.pg + r.pg, adj:a.adj + r.adj, ng:a.ng + r.nogps, f:a.f + r.faltas}), {w:0, b:0, pg:0, adj:0, ng:0, f:0});
+  $('r-worked').textContent = fmtDur(tot.w); $('r-paga').textContent = fmtDur(tot.pg);
+  $('r-saldo').textContent = fmtSaldo(tot.b); $('r-saldo').className = 'v num ' + cls(tot.b);
   $('r-info').textContent = `${fmtDate(P.from)} a ${fmtDate(P.to)} · ${uids.length > 1 ? uids.length + ' pessoas · ' : ''}${tot.f} falta(s) · ${tot.adj} marcação(ões) ajustada(s) · ${tot.ng} sem GPS. O Excel inclui o espelho, todas as marcações com coordenadas e o histórico de ajustes.`;
 }
 const loadedS = {};
@@ -962,26 +986,27 @@ async function exportXlsx(btn){
     const fmtCells = (ws, r0, r1, cols, z) => { for (let r = r0; r <= r1; r++) cols.forEach(c => { const a = X.utils.encode_cell({r, c}); if (ws[a] && ws[a].t === 'n') ws[a].z = z; }); };
     if (Rs.length > 1){
       const aoa = [['Resumo da equipe'], ['Empresa', S.cfg.empresa || ''], ['Período', `${fmtDate(P.from)} a ${fmtDate(P.to)}`], ['Gerado em', new Date().toLocaleString('pt-BR')], [],
-        ['Nome','Matrícula','Trabalhado','Previsto','Saldo','Saldo (min)','Faltas','Marcações ajustadas','Marcações sem GPS']];
-      Rs.forEach(R => { const p = profOf(R.uid); aoa.push([p.nome, p.matricula || '', R.w/1440, R.e/1440, fmtSaldo(R.s), R.s, R.faltas, R.adj, R.nogps]); });
-      const ws = X.utils.aoa_to_sheet(aoa); fmtCells(ws, 6, aoa.length - 1, [2, 3], '[h]:mm');
-      ws['!cols'] = [{wch:30},{wch:12},{wch:11},{wch:10},{wch:9},{wch:11},{wch:7},{wch:18},{wch:17}];
+        ['Nome','Matrícula','Trabalhado','Previsto','Banco de horas','Banco (min)','Extras pagas','Extras pagas (min)','Faltas','Marcações ajustadas','Marcações sem GPS']];
+      Rs.forEach(R => { const p = profOf(R.uid); aoa.push([p.nome, p.matricula || '', R.w/1440, R.e/1440, fmtSaldo(R.b), R.b, R.pg/1440, R.pg, R.faltas, R.adj, R.nogps]); });
+      const ws = X.utils.aoa_to_sheet(aoa); fmtCells(ws, 6, aoa.length - 1, [2, 3, 6], '[h]:mm');
+      ws['!cols'] = [{wch:30},{wch:12},{wch:11},{wch:10},{wch:14},{wch:11},{wch:12},{wch:17},{wch:7},{wch:18},{wch:17}];
       X.utils.book_append_sheet(wb, ws, sheetName('Resumo'));
     }
     Rs.forEach(R => {
       const p = profOf(R.uid);
       const aoa = [['Espelho de ponto'], ['Nome', p.nome], ['Matrícula', p.matricula || ''], ['Empresa', S.cfg.empresa || ''],
-        ['Período', `${fmtDate(R.from)} a ${fmtDate(R.to)}`], ['Tolerância diária (min)', Number(S.cfg.tolerancia) || 0], ['Gerado em', new Date().toLocaleString('pt-BR')], [],
-        ['Data','Dia','Entrada','Saída intervalo','Retorno intervalo','Saída','Extras','Trabalhado','Previsto','Saldo','Saldo (min)','Ajuste','Local','Observações']];
+        ['Período', `${fmtDate(R.from)} a ${fmtDate(R.to)}`], ['Tolerância diária (min)', Number(S.cfg.tolerancia) || 0], ['Intervalo mínimo (min)', Number(S.cfg.intervalo_min ?? 60)], ['Limite diário para o banco (min)', Number(S.cfg.limite_banco_dia ?? 120)], ['Gerado em', new Date().toLocaleString('pt-BR')], [],
+        ['Data','Dia','Entrada','Saída intervalo','Retorno intervalo','Saída','Extras','Trabalhado','Previsto','Saldo do dia','Banco','Banco (min)','Extras pagas','Ajuste','Local','Observações']];
       const r0 = aoa.length;
       R.rows.forEach(r => aoa.push([fmtDate(r.k), r.wd, ...r.main.map(x => x ? toMin(x.t)/1440 : null), r.extras,
-        r.worked != null ? r.worked/1440 : null, r.exp != null ? r.exp/1440 : null, r.saldo != null ? fmtSaldo(r.saldo) : '', r.saldo != null ? r.saldo : null,
+        r.worked != null ? r.worked/1440 : null, r.exp != null ? r.exp/1440 : null, r.saldo != null ? fmtSaldo(r.saldo) : '',
+        r.banco != null ? fmtSaldo(r.banco) : '', r.banco != null ? r.banco : null, r.paga ? r.paga/1440 : null,
         r.edited ? 'Sim' : '', r.locs, r.obs]));
       aoa.push([]); const rt = aoa.length;
-      aoa.push(['Totais', '', null, null, null, null, '', R.w/1440, R.e/1440, fmtSaldo(R.s), R.s, '', '', '']);
+      aoa.push(['Totais', '', null, null, null, null, '', R.w/1440, R.e/1440, fmtSaldo(R.s), fmtSaldo(R.b), R.b, R.pg/1440, '', '', '']);
       const ws = X.utils.aoa_to_sheet(aoa);
-      fmtCells(ws, r0, rt, [2, 3, 4, 5], 'hh:mm'); fmtCells(ws, r0, rt, [7, 8], '[h]:mm');
-      ws['!cols'] = [{wch:11},{wch:5},{wch:9},{wch:14},{wch:16},{wch:9},{wch:14},{wch:11},{wch:10},{wch:9},{wch:11},{wch:7},{wch:28},{wch:36}];
+      fmtCells(ws, r0, rt, [2, 3, 4, 5], 'hh:mm'); fmtCells(ws, r0, rt, [7, 8, 12], '[h]:mm');
+      ws['!cols'] = [{wch:11},{wch:5},{wch:9},{wch:14},{wch:16},{wch:9},{wch:14},{wch:11},{wch:10},{wch:11},{wch:9},{wch:11},{wch:12},{wch:7},{wch:28},{wch:36}];
       X.utils.book_append_sheet(wb, ws, sheetName(Rs.length > 1 ? p.nome : 'Espelho'));
     });
     const ma = [['Nome','Data','Hora','Marcação','Origem','Hora original','Local','Latitude','Longitude','Precisão (m)','Mapa']];
@@ -1025,24 +1050,24 @@ async function exportPdf(btn){
       doc.setTextColor(30);
       doc.text(clean(`Nome: ${p.nome}     Matrícula: ${p.matricula || '-'}     Empresa: ${S.cfg.empresa || '-'}`), 10, 21);
       const body = R.rows.map(r => [fmtDM(r.k), r.wd, ...r.main.map(x => x ? x.t + (x.origem !== 'app' || x.hora_original ? '*' : '') : ''), r.extras,
-        r.worked != null ? fmtDur(r.worked) : '', r.exp != null ? fmtDur(r.exp) : '', r.saldo != null ? fmtSaldo(r.saldo) : '', clean(r.locs), clean(r.obs)]);
+        r.worked != null ? fmtDur(r.worked) : '', r.exp != null ? fmtDur(r.exp) : '', r.banco != null ? fmtSaldo(r.banco) : '', r.paga ? fmtDur(r.paga) : '', clean(r.locs), clean(r.obs)]);
       doc.autoTable({
         startY:25, theme:'grid', margin:{left:10, right:10, bottom:14}, showFoot:'lastPage',
-        head:[['Data','Dia','Entrada','Saída int.','Retorno','Saída','Extras','Trab.','Prev.','Saldo','Local','Observações']],
-        body, foot:[['Totais','','','','','','', fmtDur(R.w), fmtDur(R.e), fmtSaldo(R.s), '', '']],
+        head:[['Data','Dia','Entrada','Saída int.','Retorno','Saída','Extras','Trab.','Prev.','Banco','Ext. paga','Local','Observações']],
+        body, foot:[['Totais','','','','','','', fmtDur(R.w), fmtDur(R.e), fmtSaldo(R.b), fmtDur(R.pg), '', '']],
         styles:{font:'helvetica', fontSize:7.4, cellPadding:1.1, halign:'center', valign:'middle', lineColor:[220,216,206], lineWidth:0.15, textColor:[30,30,30]},
         headStyles:{fillColor:[20,83,45], textColor:255, fontStyle:'bold'},
         footStyles:{fillColor:[238,235,226], textColor:[20,20,20], fontStyle:'bold'},
-        columnStyles:{10:{halign:'left', cellWidth:52}, 11:{halign:'left', cellWidth:58}},
+        columnStyles:{11:{halign:'left', cellWidth:48}, 12:{halign:'left', cellWidth:54}},
         didParseCell:h => {
-          if (h.section === 'body'){ const r = R.rows[h.row.index]; if (r.off) h.cell.styles.fillColor = [246,244,238]; if (h.column.index === 9 && r.saldo) h.cell.styles.textColor = r.saldo < 0 ? RED : GREEN; }
-          if (h.section === 'foot' && h.column.index === 9 && R.s) h.cell.styles.textColor = R.s < 0 ? RED : GREEN;
+          if (h.section === 'body'){ const r = R.rows[h.row.index]; if (r.off) h.cell.styles.fillColor = [246,244,238]; if (h.column.index === 9 && r.banco) h.cell.styles.textColor = r.banco < 0 ? RED : GREEN; }
+          if (h.section === 'foot' && h.column.index === 9 && R.b) h.cell.styles.textColor = R.b < 0 ? RED : GREEN;
         }
       });
       let y = doc.lastAutoTable.finalY + 6;
       if (y + (sign ? 32 : 12) > H - 12){ doc.addPage(); y = 18; }
       doc.setFontSize(7.8); doc.setTextColor(90);
-      doc.text(`* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min.`, 10, y);
+      doc.text(`* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min. Intervalo mínimo: ${Number(S.cfg.intervalo_min ?? 60)} min. Até ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra por dia vão para o banco; o excedente é pago.`, 10, y);
       doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')} - controle de jornada da equipe. Coordenadas de cada marcação no relatório Excel.`, 10, y + 4.2);
       if (sign){
         y += 22; doc.setDrawColor(120); doc.setLineWidth(0.3);
@@ -1064,7 +1089,7 @@ function renderAdmin(){
   $('u-list').innerHTML = S.team.map(p => `<li class="li" data-user="${p.id}"><div><div class="main">${esc(p.nome)}${p.role === 'gestor' ? '<span class="tag type">gestor</span>' : ''}${p.ativo ? '' : '<span class="tag neg">inativo</span>'}${p.trocar_senha ? '<span class="tag info">senha temporária</span>' : ''}</div>
     <div class="sub">${esc(p.email)}${p.matricula ? ' · Mat. ' + esc(p.matricula) : ''} · ${p.jornada.filter(x => x > 0).length} dias/sem · ${esc(FUSOS[p.fuso] || '')}</div></div><div class="side">›</div></li>`).join('') || '<li class="empty">Nenhum usuário.</li>';
   $('loc-list').innerHTML = S.locais.map(l => `<li class="li" style="cursor:default"><div><div class="main">${esc(l.nome)}</div><div class="sub"><a href="https://www.google.com/maps?q=${l.lat},${l.lng}" target="_blank" rel="noopener">${l.lat.toFixed(5)}, ${l.lng.toFixed(5)}</a> · raio ${l.raio_m} m</div></div><button class="btn sm danger" data-del-loc="${l.id}">Excluir</button></li>`).join('') || '<li class="empty">Nenhum local cadastrado.</li>';
-  $('cfg-emp').value = S.cfg.empresa || ''; $('cfg-tol').value = S.cfg.tolerancia ?? 10;
+  $('cfg-emp').value = S.cfg.empresa || ''; $('cfg-tol').value = S.cfg.tolerancia ?? 10; $('cfg-int').value = S.cfg.intervalo_min ?? 60; $('cfg-lim').value = S.cfg.limite_banco_dia ?? 120;
   $('cfg-fer').checked = S.cfg.feriados_nac !== false; $('cfg-gps').checked = !!S.cfg.exigir_gps;
 }
 function jornadaInputs(j){
@@ -1140,7 +1165,7 @@ async function delLocal(id){
   S.locais = S.locais.filter(x => x.id !== id); render();
 }
 async function saveCfg(btn){
-  const upd = {empresa:$('cfg-emp').value.trim(), tolerancia:Math.max(0, Math.min(120, parseInt($('cfg-tol').value, 10) || 0)), feriados_nac:$('cfg-fer').checked, exigir_gps:$('cfg-gps').checked, updated_at:new Date().toISOString()};
+  const upd = {empresa:$('cfg-emp').value.trim(), tolerancia:Math.max(0, Math.min(120, parseInt($('cfg-tol').value, 10) || 0)), intervalo_min:Math.max(0, Math.min(240, parseInt($('cfg-int').value, 10) || 0)), limite_banco_dia:Math.max(0, Math.min(720, parseInt($('cfg-lim').value, 10) || 0)), feriados_nac:$('cfg-fer').checked, exigir_gps:$('cfg-gps').checked, updated_at:new Date().toISOString()};
   setBusyBtn(btn, true, 'Salvando…');
   const {data, error} = await sb.from('config').update(upd).eq('id', 1).select().maybeSingle();
   setBusyBtn(btn, false);
