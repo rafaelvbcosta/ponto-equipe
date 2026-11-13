@@ -249,6 +249,14 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
         <div class="note" style="margin-top:8px">Saldo de antes do app: use como data o dia anterior ao início do controle. Horas pagas ou folga compensada: use Débito. O lançamento entra direto no saldo, sem tolerância nem limite diário.</div>
       </div>
     </div>
+    <div class="card" id="per-card" hidden>
+      <h2>Férias e afastamentos</h2>
+      <div class="note">Marca um período inteiro de uma vez. Dias sem marcação não alteram o banco de horas e não recebem lembretes. Se a pessoa trabalhar nesses dias, as horas contam como extra.</div>
+      <div class="grid2"><div><label class="f" for="pe-de">De</label><input type="date" id="pe-de"></div><div><label class="f" for="pe-ate">Até</label><input type="date" id="pe-ate"></div></div>
+      <label class="f" for="pe-tipo">Tipo</label><select id="pe-tipo"><option value="ferias">Férias</option><option value="atestado">Atestado / abono</option><option value="folga">Folga</option><option value="feriado">Feriado</option><option value="normal">Dia normal (desfazer período)</option></select>
+      <label class="f" for="pe-mot">Motivo / observação</label><input id="pe-mot" placeholder="Ex.: férias 2026 (período aquisitivo 2025)" autocomplete="off">
+      <button class="btn primary full" style="margin-top:12px" id="pe-go">Aplicar ao período</button>
+    </div>
     <div class="card">
       <h2>Lançar ou corrigir outro dia</h2>
       <div class="note" id="pick-note">Esqueceu de marcar? Abra o dia e envie uma solicitação de ajuste ao gestor.</div>
@@ -397,7 +405,7 @@ const ERR = {
   hora_futura:'O horário informado ainda não chegou.', hora_obrigatoria:'Informe o horário.', tipo_invalido:'Dados inválidos.',
   data_invalida:'Data inválida.', solicitacao_invalida:'Esta solicitação já foi tratada.', solicitacao_repetida:'Você já tem uma solicitação igual aguardando aprovação.',
   sem_permissao:'Sem permissão para esta ação.', ultimo_gestor:'É preciso manter pelo menos um gestor ativo.', dados_invalidos:'Dados inválidos.',
-  usuario_inexistente:'Usuário não encontrado.', coordenadas_invalidas:'Localização inválida.', lancamento_nao_encontrado:'Lançamento não encontrado (pode já ter sido removido).',
+  usuario_inexistente:'Usuário não encontrado.', coordenadas_invalidas:'Localização inválida.', lancamento_nao_encontrado:'Lançamento não encontrado (pode já ter sido removido).', periodo_invalido:'Período inválido (a data final deve ser depois da inicial, até 1 ano).',
   'Invalid login credentials':'E-mail ou senha incorretos.', 'Failed to fetch':'Sem conexão com o servidor. Verifique a internet.'
 };
 function errMsg(e){ const m = e?.message || e?.erro || String(e || 'Erro'); for (const k in ERR) if (m.includes(k)) return ERR[k]; return m; }
@@ -785,6 +793,8 @@ async function renderHist(){
   try { await ensureRange(uid, first, last); } catch (e){ $('m-days').innerHTML = `<li class="empty">${esc(errMsg(e))}</li>`; return; }
   if (histUid() !== uid || S.view !== 'historico') return;
   renderLanc(uid);
+  $('per-card').hidden = !isG();
+  if (isG() && $('per-card').dataset.uid !== uid){ $('per-card').dataset.uid = uid; $('pe-de').value = tk; $('pe-ate').value = ''; $('pe-tipo').value = 'ferias'; $('pe-mot').value = ''; }
   const keys = []; eachDay(first, last, k => { if (k <= tk || U(uid).punches[k] || U(uid).status[k]) keys.push(k); });
   keys.reverse();
   const sm = sumRange(uid, first, last < tk ? last : tk);
@@ -862,6 +872,24 @@ async function delLanc(id){
   if (error) return toast(errMsg(error), 5000);
   invalidate(uid, l.dia); await ensureLanc(uid, true);
   toast('Lançamento removido.'); render();
+}
+async function aplicarPeriodo(btn){
+  const uid = histUid(), p = profOf(uid), de = $('pe-de').value, ate = $('pe-ate').value, tipo = $('pe-tipo').value, mot = $('pe-mot').value.trim();
+  if (!de || !ate) return toast('Informe as datas de início e fim.');
+  if (ate < de) return toast(ERR.periodo_invalido);
+  if (mot.length < 3) return toast(ERR.motivo_obrigatorio);
+  let n = 0, uteis = 0; eachDay(de, ate, k => { n++; if (!holiday(k) && Number(p.jornada?.[dateOf(k).getDay()]) > 0) uteis++; });
+  if (n > 367) return toast(ERR.periodo_invalido);
+  const nome = tipo === 'normal' ? 'Dia normal' : TYPES[tipo];
+  if (!(await ask('Aplicar ao período?', `${p.nome}: ${fmtDate(de)} a ${fmtDate(ate)} (${n} dia${n > 1 ? 's' : ''}, ${uteis} com jornada prevista) como “${nome}”. Dias desse período que já tinham outro tipo serão substituídos.`, 'Aplicar'))) return;
+  setBusyBtn(btn, true, 'Aplicando…');
+  const {data, error} = await sb.rpc('gestor_periodo_tipo', {p_user:uid, p_de:de, p_ate:ate, p_tipo:tipo, p_motivo:mot, p_obs:tipo === 'normal' ? null : mot});
+  setBusyBtn(btn, false);
+  if (error) return toast(errMsg(error), 5000);
+  monthsBetween(de, ate).forEach(m => U(uid).months.delete(m));
+  if (isG() && de <= todayKey() && ate >= todayKey()) await loadTeam();
+  $('pe-ate').value = ''; $('pe-mot').value = '';
+  toast(`${data || n} dia(s) marcados como ${nome}.`); render();
 }
 async function loadMyReqs(){
   const {data} = await sb.from('requests').select('*').eq('user_id', S.me.id).order('created_at', {ascending:false}).limit(15);
@@ -987,6 +1015,8 @@ async function loadTeam(){
   const me = S.team.find(p => p.id === S.me.id); if (me) S.me = me;
   const tk = todayKey();
   const ps = await fetchAll(() => sb.from('punches').select('user_id,hora,lat,lng,geo_status,origem,precisao').eq('dia', tk).eq('removido', false).order('hora'));
+  const {data:sts} = await sb.from('day_status').select('user_id,tipo').eq('dia', tk);
+  S.teamStatus = {}; (sts || []).forEach(x => { if (x.tipo !== 'normal') S.teamStatus[x.user_id] = x.tipo; });
   S.teamToday = {};
   ps.forEach(p => { p.t = p.hora.slice(0, 5); (S.teamToday[p.user_id] || (S.teamToday[p.user_id] = [])).push(p); });
 }
@@ -994,9 +1024,9 @@ function renderTeam(){
   const tk = todayKey(); $('t-date').textContent = fmtDate(tk);
   let on = 0, out = 0, none = 0;
   const rows = S.team.filter(p => p.ativo).map(p => {
-    const ps = S.teamToday[p.id] || [], n = ps.length, exp = holiday(tk) ? 0 : Number(p.jornada[dateOf(tk).getDay()]) || 0;
+    const ps = S.teamToday[p.id] || [], n = ps.length, tipoHoje = S.teamStatus?.[p.id], exp = holiday(tk) || tipoHoje ? 0 : Number(p.jornada[dateOf(tk).getDay()]) || 0;
     let st, cl;
-    if (!n){ st = exp ? 'Sem marcação hoje' : 'Sem expediente hoje'; cl = ''; if (exp) none++; }
+    if (!n){ st = tipoHoje ? TYPES[tipoHoje] : exp ? 'Sem marcação hoje' : 'Sem expediente hoje'; cl = ''; if (exp) none++; }
     else if (n % 2 === 1){ st = `${n === 3 ? 'Retornou' : n === 1 ? 'Trabalhando desde' : 'Em atividade desde'} ${ps[n-1].t}`; cl = 'on'; on++; }
     else { st = `${n === 2 ? 'Em intervalo / saiu' : 'Encerrou'} às ${ps[n-1].t}`; cl = n === 2 ? 'pause' : 'out'; out++; }
     const last = ps[n-1], loc = last ? localOf(last) : '';
@@ -1522,6 +1552,7 @@ function bind(){
   });
   $('cfg-save').addEventListener('click', e => saveCfg(e.currentTarget));
   $('lc-add').addEventListener('click', e => addLanc(e.currentTarget));
+  $('pe-go').addEventListener('click', e => aplicarPeriodo(e.currentTarget));
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible' || !S.me || !$('scr-app').classList.contains('on')) return;
     try {
