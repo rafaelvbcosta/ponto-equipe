@@ -195,6 +195,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <button class="btn-punch" id="btn-punch">Registrar entrada<span class="sub">&nbsp;</span></button>
       <div class="gps" id="h-gps"></div>
     </div>
+    <div class="card" id="h-extra" hidden style="border-color:var(--warn)"></div>
     <div class="card" id="h-lemb" hidden></div>
     <div class="stats">
       <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="h-worked">0:00</div></div>
@@ -455,7 +456,7 @@ const S = {
   teamToday:{}, pending:[], myReqs:[], view:'hoje', month:null, target:null, rMode:'month', lastKey:null, gpsState:''
 };
 const C = {};
-const U = uid => C[uid] || (C[uid] = {months:new Set(), punches:{}, status:{}, reqs:{}, hist:{}, lanc:null});
+const U = uid => C[uid] || (C[uid] = {months:new Set(), punches:{}, status:{}, reqs:{}, hist:{}, lanc:null, just:{}});
 // Lançamentos manuais no banco de horas (todos de uma vez: são poucos por pessoa)
 async function ensureLanc(uid, force){
   const u = U(uid); if (u.lanc && !force) return;
@@ -495,21 +496,24 @@ async function ensureRange(uid, fromK, toK){
   if (!missing.length) return;
   const span = monthsBetween(missing[0], missing[missing.length - 1]);
   const a = span[0] + '-01', b = monthEnd(span[span.length - 1]);
-  const [ps, st, rq, hs] = await Promise.all([
+  const [ps, st, rq, hs, js] = await Promise.all([
     fetchAll(() => sb.from('punches').select('*').eq('user_id', uid).eq('removido', false).gte('dia', a).lte('dia', b).order('dia').order('hora')),
     fetchAll(() => sb.from('day_status').select('*').eq('user_id', uid).gte('dia', a).lte('dia', b)),
     fetchAll(() => sb.from('requests').select('*').eq('user_id', uid).gte('dia', a).lte('dia', b).order('created_at')),
     fetchAll(() => sb.from('historico').select('*').eq('user_id', uid).gte('dia', a).lte('dia', b).order('created_at')),
+    fetchAll(() => sb.from('justificativas_extra').select('*').eq('user_id', uid).gte('dia', a).lte('dia', b)),
   ]);
   const inSpan = k => k >= a && k <= b;
   for (const k of Object.keys(u.punches)) if (inSpan(k)) delete u.punches[k];
   for (const k of Object.keys(u.status)) if (inSpan(k)) delete u.status[k];
   for (const k of Object.keys(u.hist)) if (inSpan(k)) delete u.hist[k];
+  for (const k of Object.keys(u.just)) if (inSpan(k)) delete u.just[k];
   for (const id of Object.keys(u.reqs)) if (inSpan(u.reqs[id].dia)) delete u.reqs[id];
   ps.forEach(p => { p.t = p.hora.slice(0, 5); (u.punches[p.dia] || (u.punches[p.dia] = [])).push(p); });
   st.forEach(s => { u.status[s.dia] = s; });
   rq.forEach(r => { u.reqs[r.id] = r; });
   hs.forEach(h => { (u.hist[h.dia] || (u.hist[h.dia] = [])).push(h); });
+  js.forEach(j => { u.just[j.dia] = j; });
   span.forEach(m => u.months.add(m));
 }
 function invalidate(uid, k){ U(uid).months.delete(k.slice(0, 7)); }
@@ -554,8 +558,15 @@ function calc(uid, k, live){
   if (dom100){ paga100 = counts ? worked : 0; saldo = paga100; banco = 0; paga = 0; }
   else { banco = saldo > 0 ? Math.min(saldo, lim) : saldo; paga = saldo > 0 ? saldo - banco : 0; }
   const st = U(uid).status[k];
-  return {ps, worked, live:liveW, exp, saldo, banco, paga, paga100, dom100, counts, open, autoInt, type:st?.tipo || 'normal', obs:st?.obs || '',
+  // Hora extra do dia (saldo positivo depois da tolerância) pede um motivo do colaborador
+  const extra = counts && saldo > 0, just = U(uid).just[k]?.motivo || '';
+  return {ps, worked, live:liveW, exp, saldo, banco, paga, paga100, dom100, counts, open, autoInt, type:st?.tipo || 'normal', obs:st?.obs || '', extra, just,
     edited:ps.some(p => p.origem !== 'app' || p.hora_original), noGps:ps.filter(p => p.origem === 'app' && p.lat == null).length};
+}
+function extrasPendentes(uid){
+  const out = [], tk = todayKey(), ini = profOf(uid)?.inicio || tk;
+  eachDay(ini, tk, k => { const c = calc(uid, k); if (c.extra && !c.just) out.push({k, saldo:c.saldo}); });
+  return out;
 }
 function sumRange(uid, from, to){
   const r = {w:0, e:0, s:0, b:0, pg:0, p100:0, odd:[], faltas:0}; const tk = todayKey();
@@ -654,6 +665,8 @@ async function enterApp(){
   } catch (e){ showBanner('Não consegui carregar todos os dados: ' + errMsg(e)); }
   route();
   pushInit().then(() => render());
+  const pend = extrasPendentes(S.me.id);
+  if (pend.length) setTimeout(() => { if (S.view === 'hoje' && !$('ov-dlg').classList.contains('show')) pedirJustificativa(S.me.id, pend[pend.length - 1].k, false); }, 1200);
 }
 
 // ================= NAVEGAÇÃO =================
@@ -733,6 +746,36 @@ function renderToday(){
   if (acc.odd.length){ pe.hidden = false; pe.textContent = `Atenção: ${acc.odd.length} dia(s) com número ímpar de marcações (${acc.odd.slice(-5).map(fmtDM).join(', ')}). Abra o dia no Histórico e solicite o ajuste.`; }
   else pe.hidden = true;
   renderLembConvite();
+  renderExtraPend();
+}
+function renderExtraPend(){
+  const el = $('h-extra'), pend = extrasPendentes(S.me.id);
+  el.hidden = !pend.length; if (!pend.length) return;
+  const ult = pend.slice(-5).reverse();
+  el.innerHTML = `<h2>Informe o motivo da hora extra</h2><div class="note">${pend.length === 1 ? 'Há 1 dia' : `Há ${pend.length} dias`} com hora extra sem justificativa. O motivo fica registrado para o gestor.</div>
+    <ul class="list" style="margin-top:6px">${ult.map(x => `<li class="li" data-just="${x.k}"><div><div class="main">${fmtDate(x.k)} · ${WD[dateOf(x.k).getDay()]}</div><div class="sub num pos">${fmtSaldo(x.saldo)} de extra</div></div><span class="btn sm primary">Justificar</span></li>`).join('')}</ul>
+    ${pend.length > 5 ? `<div class="note">E mais ${pend.length - 5} dia(s) anteriores: abra pelo Histórico.</div>` : ''}`;
+}
+// Pede o motivo da hora extra de um dia (próprio ou, para o gestor, de qualquer pessoa)
+async function pedirJustificativa(uid, k, auto){
+  const c = calc(uid, k), outro = uid !== S.me.id;
+  const r = await dialog(`<h2>Motivo da hora extra</h2>
+    <p class="note" style="font-size:14px;margin:0 0 4px">${outro ? esc(nameOf(uid)) + ' · ' : ''}${fmtDate(k)}: <b class="pos">${fmtSaldo(c.saldo)}</b> além da jornada${auto ? ' hoje' : ''}. Conte rapidamente o motivo (ex.: atendimento emergencial, deslocamento, cliente pediu para estender).</p>
+    <label class="f" for="dlg-t">Motivo</label><textarea id="dlg-t" maxlength="500">${esc(c.just)}</textarea>
+    <div class="btn-row" style="margin-top:16px"><button class="btn" data-r="0">${auto ? 'Depois' : 'Cancelar'}</button><button class="btn primary" data-r="1">Salvar motivo</button></div>`,
+    v => v === '1' ? $('dlg-t').value.trim() : null);
+  if (r === null){ if (auto) toast('Tudo bem. O pedido fica na tela Hoje até você informar o motivo.', 5000); return false; }
+  if (r.length < 3){ toast(ERR.motivo_obrigatorio); return pedirJustificativa(uid, k, auto); }
+  const {data, error} = await sb.rpc('justificar_extra', {p_dia:k, p_motivo:r, p_user:uid});
+  if (error){ toast(errMsg(error), 5000); return false; }
+  U(uid).just[k] = data || {dia:k, motivo:r};
+  invalidate(uid, k);
+  toast('Motivo registrado.'); render(); if (SH) renderSheet();
+  return true;
+}
+async function checarExtraHoje(){
+  const tk = todayKey(), c = calc(S.me.id, tk);
+  if (c.extra && !c.just) await pedirJustificativa(S.me.id, tk, true);
 }
 function getPos(){
   return new Promise(res => {
@@ -769,6 +812,7 @@ async function punch(){
     if (isG() && p.dia === todayKey()) (S.teamToday[S.me.id] || (S.teamToday[S.me.id] = [])).push(p);
     try { navigator.vibrate && navigator.vibrate(40); } catch (e) {}
     toast(`Ponto registrado às ${p.t} · ${localOf(p)}`, 5000);
+    setTimeout(checarExtraHoje, 800);
   } catch (e){ toast(errMsg(e), 6000); }
   finally { punching = false; btn.disabled = false; render(); }
 }
@@ -813,6 +857,7 @@ async function renderHist(){
     if (c.autoInt) tags.push(`<span class="tag info">−${fmtDur(c.autoInt)} intervalo</span>`);
     if (c.paga) tags.push(`<span class="tag type">${fmtDur(c.paga)} paga</span>`);
     if (c.paga100) tags.push(`<span class="tag type">${fmtDur(c.paga100)} a 100%</span>`);
+    if (c.extra && !c.just) tags.push('<span class="tag">extra sem motivo</span>');
     const pend = reqs.filter(r => r.dia === k && r.status === 'pendente').length;
     if (pend) tags.push(`<span class="tag">${pend} pendente${pend > 1 ? 's' : ''}</span>`);
     return `<li class="day${c.exp === 0 && !np ? ' off' : ''}${k === tk ? ' today' : ''}" data-k="${k}">
@@ -923,6 +968,8 @@ function renderSheet(){
     <div class="row-between"><div><h2 style="margin:0;text-transform:capitalize">${WDL[d.getDay()]}, ${fmtDate(k)}</h2>${uid !== S.me.id ? `<div class="note">${esc(nameOf(uid))}</div>` : ''}</div><button class="link" data-act="close">Fechar</button></div>
     ${ini && k < ini ? `<div class="banner" style="margin:10px 0 0">Data anterior ao início do controle (${fmtDate(ini)}): não entra no banco de horas.</div>` : ''}
     <div class="note" style="margin-top:8px">${c.type !== 'normal' ? `<span class="tag type" style="margin-left:0">${esc(TYPES[c.type])}</span> ` : hol ? `<span class="tag type" style="margin-left:0">Feriado: ${esc(hol)}</span> ` : ''}${c.obs ? 'Obs.: ' + esc(c.obs) + ' · ' : ''}Trabalhado ${fmtDur(c.worked)}${c.autoInt ? ` (já descontado ${fmtDur(c.autoInt)} de intervalo)` : ''} · Previsto ${fmtDur(c.exp)}${c.counts ? ` · Saldo <b class="${cls(c.saldo)}">${fmtSaldo(c.saldo)}</b>${c.paga ? ` (banco ${fmtSaldo(c.banco)} + ${fmtDur(c.paga)} paga)` : ''}${c.paga100 ? ' (tudo extra a 100%: domingo/feriado)' : ''}` : ''}</div>
+    ${c.extra ? `<div class="${c.just ? 'banner info' : 'banner'}" style="margin:10px 0 0">${c.just ? `<b>Motivo da hora extra:</b> ${esc(c.just)}` : '<b>Hora extra sem justificativa.</b>'}
+      ${canAdj ? `<br><button class="link" data-act="justificar" style="padding:4px 0 0">${c.just ? 'Alterar motivo' : 'Informar o motivo'}</button>` : ''}</div>` : ''}
     <h3>Marcações</h3>
     <ul class="timeline">${ps.length ? ps.map((p, i) => `<li><span><span class="lbl">${labelFor(i)}</span>
       ${p.hora_original ? `<span class="tag">era ${p.hora_original.slice(0, 5)}</span>` : ''}${p.origem === 'ajuste' ? '<span class="tag">incluída por ajuste</span>' : p.origem === 'gestor' ? '<span class="tag">lançada pelo gestor</span>' : ''}
@@ -1050,7 +1097,7 @@ function reportUids(){
   return v === 'todos' ? S.team.filter(p => p.ativo || p.id === S.me.id).map(p => p.id) : [v || S.me.id];
 }
 function buildReport(uid, from, to){
-  const tk = todayKey(), rows = []; let w = 0, e = 0, s = 0, b = 0, pg = 0, p100 = 0, adj = 0, nogps = 0, faltas = 0;
+  const tk = todayKey(), rows = []; let w = 0, e = 0, s = 0, b = 0, pg = 0, p100 = 0, adj = 0, nogps = 0, faltas = 0, semJust = 0;
   eachDay(from, to, k => {
     const c = calc(uid, k), d = dateOf(k), ps = c.ps, future = k > tk, hol = holiday(k);
     const main = ps.length === 2 ? [ps[0], null, null, ps[1]] : [0,1,2,3].map(i => ps[i] || null), ex = ps.slice(4), extras = [];
@@ -1061,14 +1108,15 @@ function buildReport(uid, from, to){
     if (c.open && ps.length && k < tk) obs.push('Marcação ímpar');
     if (c.autoInt) obs.push(`Intervalo descontado ${fmtDur(c.autoInt)}`);
     if (c.obs) obs.push(c.obs);
+    if (c.extra){ if (c.just) obs.push(`Motivo da extra: ${c.just}`); else { obs.push('EXTRA SEM JUSTIFICATIVA'); semJust++; } }
     lancDe(uid, k, k).forEach(l => obs.push(`Lançamento no banco ${fmtSaldo(l.minutos)} (${l.motivo})`));
     if (c.counts){ w += c.worked; e += c.exp; s += c.saldo; b += c.banco; pg += c.paga; p100 += c.paga100; }
     adj += ps.filter(p => p.origem !== 'app' || p.hora_original).length; nogps += c.noGps;
     const locs = [...new Set(ps.map(localOf))];
     rows.push({k, wd:WD[d.getDay()], main, extras:extras.join(' '), worked:ps.length ? c.worked : null, exp:c.counts ? c.exp : null,
-      saldo:c.counts ? c.saldo : null, banco:c.counts ? c.banco : null, paga:c.counts ? c.paga : null, paga100:c.counts ? c.paga100 : null, obs:obs.join(' · '), locs:locs.join(' / '), edited:c.edited, off:c.exp === 0, ps});
+      saldo:c.counts ? c.saldo : null, banco:c.counts ? c.banco : null, paga:c.counts ? c.paga : null, paga100:c.counts ? c.paga100 : null, obs:obs.join(' · '), locs:locs.join(' / '), edited:c.edited, off:c.exp === 0, ps, semJust:c.extra && !c.just});
   });
-  return {uid, from, to, rows, w, e, s, b, pg, p100, adj, nogps, faltas, ex:extrato(uid, from, to)};
+  return {uid, from, to, rows, w, e, s, b, pg, p100, adj, nogps, faltas, semJust, ex:extrato(uid, from, to)};
 }
 let repToken = 0;
 async function renderReport(){
@@ -1122,10 +1170,10 @@ async function exportXlsx(btn){
     const fmtCells = (ws, r0, r1, cols, z) => { for (let r = r0; r <= r1; r++) cols.forEach(c => { const a = X.utils.encode_cell({r, c}); if (ws[a] && ws[a].t === 'n') ws[a].z = z; }); };
     if (Rs.length > 1){
       const aoa = [['Resumo da equipe'], ['Empresa', S.cfg.empresa || ''], ['Período', `${fmtDate(P.from)} a ${fmtDate(P.to)}`], ['Gerado em', new Date().toLocaleString('pt-BR')], [],
-        ['Nome','Matrícula','Trabalhado','Previsto','Banco dos dias','Banco dos dias (min)','Extras pagas','Extras pagas (min)','Extras 100%','Extras 100% (min)','Faltas','Marcações ajustadas','Marcações sem GPS','Saldo anterior','Lançamentos manuais','Saldo final do banco','Saldo final (min)']];
-      Rs.forEach(R => { const p = profOf(R.uid); aoa.push([p.nome, p.matricula || '', R.w/1440, R.e/1440, fmtSaldo(R.b), R.b, R.pg/1440, R.pg, R.p100/1440, R.p100, R.faltas, R.adj, R.nogps, fmtSaldo(R.ex.ant), fmtSaldo(R.ex.lanc), fmtSaldo(R.ex.fim), R.ex.fim]); });
+        ['Nome','Matrícula','Trabalhado','Previsto','Banco dos dias','Banco dos dias (min)','Extras pagas','Extras pagas (min)','Extras 100%','Extras 100% (min)','Faltas','Marcações ajustadas','Marcações sem GPS','Saldo anterior','Lançamentos manuais','Saldo final do banco','Saldo final (min)','Extras sem justificativa']];
+      Rs.forEach(R => { const p = profOf(R.uid); aoa.push([p.nome, p.matricula || '', R.w/1440, R.e/1440, fmtSaldo(R.b), R.b, R.pg/1440, R.pg, R.p100/1440, R.p100, R.faltas, R.adj, R.nogps, fmtSaldo(R.ex.ant), fmtSaldo(R.ex.lanc), fmtSaldo(R.ex.fim), R.ex.fim, R.semJust]); });
       const ws = X.utils.aoa_to_sheet(aoa); fmtCells(ws, 6, aoa.length - 1, [2, 3, 6, 8], '[h]:mm');
-      ws['!cols'] = [{wch:30},{wch:12},{wch:11},{wch:10},{wch:14},{wch:11},{wch:12},{wch:17},{wch:12},{wch:17},{wch:7},{wch:18},{wch:17},{wch:14},{wch:19},{wch:19},{wch:16}];
+      ws['!cols'] = [{wch:30},{wch:12},{wch:11},{wch:10},{wch:14},{wch:11},{wch:12},{wch:17},{wch:12},{wch:17},{wch:7},{wch:18},{wch:17},{wch:14},{wch:19},{wch:19},{wch:16},{wch:22}];
       X.utils.book_append_sheet(wb, ws, sheetName('Resumo'));
     }
     Rs.forEach(R => {
@@ -1146,6 +1194,7 @@ async function exportXlsx(btn){
       aoa.push(['Banco dos dias do período', fmtSaldo(R.ex.dias), R.ex.dias]);
       aoa.push(['Lançamentos manuais no período', fmtSaldo(R.ex.lanc), R.ex.lanc]);
       aoa.push(['Saldo final do banco', fmtSaldo(R.ex.fim), R.ex.fim]);
+      aoa.push(['Dias com extra sem justificativa', R.semJust]);
       const ws = X.utils.aoa_to_sheet(aoa);
       fmtCells(ws, r0, rt, [2, 3, 4, 5], 'hh:mm'); fmtCells(ws, r0, rt, [7, 8, 12, 13], '[h]:mm');
       ws['!cols'] = [{wch:11},{wch:5},{wch:9},{wch:14},{wch:16},{wch:9},{wch:14},{wch:11},{wch:10},{wch:11},{wch:9},{wch:11},{wch:12},{wch:11},{wch:7},{wch:28},{wch:36}];
@@ -1202,7 +1251,8 @@ async function exportPdf(btn){
         footStyles:{fillColor:[238,235,226], textColor:[20,20,20], fontStyle:'bold'},
         columnStyles:{12:{halign:'left', cellWidth:44}, 13:{halign:'left', cellWidth:50}},
         didParseCell:h => {
-          if (h.section === 'body'){ const r = R.rows[h.row.index]; if (r.off) h.cell.styles.fillColor = [246,244,238]; if (h.column.index === 9 && r.banco) h.cell.styles.textColor = r.banco < 0 ? RED : GREEN; }
+          if (h.section === 'body'){ const r = R.rows[h.row.index]; if (r.off) h.cell.styles.fillColor = [246,244,238]; if (h.column.index === 9 && r.banco) h.cell.styles.textColor = r.banco < 0 ? RED : GREEN;
+            if (h.column.index === 13 && r.semJust){ h.cell.styles.textColor = [180,83,9]; h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [253,240,220]; } }
           if (h.section === 'foot' && h.column.index === 9 && R.b) h.cell.styles.textColor = R.b < 0 ? RED : GREEN;
         }
       });
@@ -1212,7 +1262,7 @@ async function exportPdf(btn){
       doc.text(`Banco de horas: saldo anterior ${fmtSaldo(R.ex.ant)}  +  dias do período ${fmtSaldo(R.ex.dias)}  +  lançamentos manuais ${fmtSaldo(R.ex.lanc)}  =  saldo final ${fmtSaldo(R.ex.fim)}`, 10, y);
       doc.setFont('helvetica', 'normal'); y += 6;
       doc.setFontSize(7.8); doc.setTextColor(90);
-      const rodape = `* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min. Intervalo mínimo: ${Number(S.cfg.intervalo_min ?? 60)} min. Até ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra por dia vão para o banco; o excedente é pago. Domingos e feriados: tudo extra a 100%.`;
+      const rodape = `* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Extras sem justificativa: ${R.semJust}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min. Intervalo mínimo: ${Number(S.cfg.intervalo_min ?? 60)} min. Até ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra por dia vão para o banco; o excedente é pago. Domingos e feriados: tudo extra a 100%.`;
       const nota = doc.splitTextToSize(rodape, W - 20);
       doc.text(nota, 10, y); y += (nota.length - 1) * 3.4;
       doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')} - controle de jornada da equipe. Coordenadas de cada marcação no relatório Excel.`, 10, y + 4.2);
@@ -1493,6 +1543,7 @@ function bind(){
     const tab = t.closest('#tabs button'); if (tab) return go(tab.dataset.v);
     const g = t.closest('[data-go]'); if (g) return go(g.dataset.go);
     if (t.closest('[data-logout]')){ await pushSair(); await sb.auth.signOut(); location.hash = ''; location.reload(); return; }
+    const jd = t.closest('#h-extra [data-just]'); if (jd) return pedirJustificativa(S.me.id, jd.dataset.just, false);
     const lb = t.closest('[data-lemb]');
     if (lb){
       const a = lb.dataset.lemb;
@@ -1517,6 +1568,7 @@ function bind(){
       const a = act.dataset.act;
       if (a === 'close') return closeSheet();
       if (a === 'submit') return submitAdj(act);
+      if (a === 'justificar') return pedirJustificativa(SH.uid, SH.k, false);
       if (a === 'regen'){ $('u-pass').value = randomPass(); return; }
       if (a === 'save-user') return saveUser(act.dataset.id, act);
       if (a === 'create-user') return createUser(act);

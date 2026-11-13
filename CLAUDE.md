@@ -18,7 +18,7 @@ Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele
 
 - O front usa a chave *publishable*; toda a segurança está em RLS + funções `security definer`.
 - Tabelas só têm políticas de SELECT (exceto `config` e `locais` para gestor). **Nenhuma escrita direta em `punches`, `requests`, `day_status`, `historico`**: tudo passa por RPC.
-- RPCs: `registrar_ponto` (horário do servidor, no `profiles.fuso`; bloqueia repetição em menos de 2 min sem `p_forcar`), `solicitar_ajuste`, `cancelar_solicitacao`, `revisar_solicitacao` (gestor), `gestor_ajuste` (gestor, aplica direto), `gestor_salvar_usuario_v3` (v2 ainda existe), `senha_trocada`, `existe_gestor` (anon), `push_salvar`, `push_remover`, `vapid_publica`, `gestor_lancar_banco`, `gestor_remover_lancamento` e `gestor_periodo_tipo` (gestor; aplica um tipo de dia a um intervalo, até 1 ano, chamando `_aplicar_ajuste` dia a dia).
+- RPCs: `registrar_ponto` (horário do servidor, no `profiles.fuso`; bloqueia repetição em menos de 2 min sem `p_forcar`), `solicitar_ajuste`, `cancelar_solicitacao`, `revisar_solicitacao` (gestor), `gestor_ajuste` (gestor, aplica direto), `gestor_salvar_usuario_v3` (v2 ainda existe), `senha_trocada`, `existe_gestor` (anon), `push_salvar`, `push_remover`, `vapid_publica`, `gestor_lancar_banco`, `gestor_remover_lancamento` e `gestor_periodo_tipo` (gestor; aplica um tipo de dia a um intervalo, até 1 ano, chamando `_aplicar_ajuste` dia a dia), `justificar_extra`.
 - `_aplicar_ajuste` é interna (sem execute para ninguém) e grava em `historico`. Marcações nunca são apagadas: `removido = true`; alteração guarda `hora_original`.
 - Contas são criadas pela Edge Function (`criar`, `senha`). `bootstrap` só funciona enquanto não existe nenhum gestor. Cadastro público do Supabase Auth está **desligado**.
 - Mudanças de schema: sempre por `apply_migration`, preferindo mudanças não destrutivas (ex.: criar `_v2` em vez de dropar função). Salve uma cópia em `supabase/migrations/`.
@@ -47,6 +47,8 @@ Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele
 - Dias antes de `profiles.inicio` não contam; dia de hoje só conta quando fechado (número par de marcações).
 - **Lançamentos manuais** (`banco_lancamentos`: dia, minutos ±, motivo; remoção lógica com `removido`): entram direto no banco, sem tolerância nem limite diário. Usados para o saldo anterior ao app (data = dia anterior ao `inicio`) e para horas pagas/compensadas. Gestor lança no Histórico da pessoa; tudo gera linha em `historico` (`banco` / `banco_removido`).
 - Banco acumulado = soma diária desde `inicio` + todos os lançamentos até hoje (`extrato()` no front). Banco do mês inclui os lançamentos com data no mês.
+- **Justificativa de hora extra** (`justificativas_extra`, uma por pessoa/dia; RPC `justificar_extra(p_dia, p_motivo, p_user)`: o próprio colaborador ou o gestor por qualquer um; grava `historico` `extra_justificada`). Dia com extra = `calc().extra` (conta e saldo > 0 depois da tolerância, inclusive domingo/feriado). Não é aprovação: a extra conta igual.
+  O app pede o motivo ao marcar a saída que fecha o dia com extra, mostra o cartão "Informe o motivo da hora extra" na tela Hoje e abre o pedido ao entrar no app enquanto houver dia pendente (decisão do Rafael: insistir). Relatórios: Observações traz "Motivo da extra: …" ou "EXTRA SEM JUSTIFICATIVA" (destacado no PDF) e o total de dias sem justificativa.
 
 ## Relatórios
 
@@ -65,11 +67,7 @@ Excel (SheetJS 0.18.5) com abas Resumo (equipe), Espelho por pessoa, Marcações
 
 ## Pendências (pedidas pelo Rafael, ainda não implementadas)
 
-- **Justificativa de hora extra:** quando o dia fechar com saldo positivo (acima da tolerância), pedir ao colaborador o motivo da hora extra.
-  Esboço: ao registrar a saída (ou ao abrir o app no dia seguinte) e o dia tiver extra, abrir um campo "Motivo da hora extra"; gravar por RPC
-  (ex.: `justificar_extra(p_dia, p_motivo)`, numa tabela própria ou em `day_status.obs`, com linha em `historico`); mostrar o motivo para o gestor
-  (Histórico, Equipe/Aprovações) e na coluna Observações do Excel/PDF. A decidir com o Rafael: se é obrigatório, se o gestor precisa aprovar a extra
-  e se dia sem justificativa deve aparecer destacado no relatório.
+- Nenhuma no momento.
 
 ## Observação
 
