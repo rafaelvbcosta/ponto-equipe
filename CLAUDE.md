@@ -63,6 +63,14 @@ Excel (SheetJS 0.18.5) com abas Resumo (equipe), Espelho por pessoa, Marcações
 - Verifique sempre `node --check` no script e gere um Excel/PDF de exemplo.
 - Publicar = commit + push em `main` (o Pages atualiza em 1–2 min).
 
+## Pendências (pedidas pelo Rafael, ainda não implementadas)
+
+- **Justificativa de hora extra:** quando o dia fechar com saldo positivo (acima da tolerância), pedir ao colaborador o motivo da hora extra.
+  Esboço: ao registrar a saída (ou ao abrir o app no dia seguinte) e o dia tiver extra, abrir um campo "Motivo da hora extra"; gravar por RPC
+  (ex.: `justificar_extra(p_dia, p_motivo)`, numa tabela própria ou em `day_status.obs`, com linha em `historico`); mostrar o motivo para o gestor
+  (Histórico, Equipe/Aprovações) e na coluna Observações do Excel/PDF. A decidir com o Rafael: se é obrigatório, se o gestor precisa aprovar a extra
+  e se dia sem justificativa deve aparecer destacado no relatório.
+
 ## Observação
 
 É controle interno de jornada, não REP-P certificado (Portaria 671/2021).
