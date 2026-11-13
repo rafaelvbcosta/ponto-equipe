@@ -231,7 +231,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
     </div>
     <div class="stats">
       <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="s-worked">0:00</div></div>
-      <div class="stat"><div class="k">Banco no mês</div><div class="v num" id="s-saldo">0:00</div><div class="note num" id="s-acum"></div></div>
+      <div class="stat"><div class="k">Banco acumulado</div><div class="v num" id="s-banco">…</div><div class="note num" id="s-mes"></div></div>
       <div class="stat"><div class="k">Extras pagas</div><div class="v num" id="s-paga">0:00</div><div class="note num" id="s-p100"></div></div>
     </div>
     <div class="card" style="padding:4px 12px"><ul class="list" id="m-days"></ul></div>
@@ -854,7 +854,8 @@ async function renderHist(){
   const sm = sumRange(uid, first, last < tk ? last : tk);
   $('s-worked').textContent = fmtDur(sm.w); $('s-paga').textContent = fmtDur(sm.pg + sm.p100); $('s-p100').textContent = sm.p100 ? `${fmtDur(sm.p100)} em dom./feriado (100%)` : '';
   const smb = sm.b + lancSum(uid, first, last < tk ? last : tk);
-  $('s-saldo').textContent = fmtSaldo(smb); $('s-saldo').className = 'v num ' + cls(smb);
+  $('s-mes').innerHTML = `No mês: <b class="${cls(smb)}">${fmtSaldo(smb)}</b>`;
+  setAcumulado(uid);
   const reqs = Object.values(U(uid).reqs);
   $('m-days').innerHTML = keys.length ? keys.map(k => {
     const c = calc(uid, k), d = dateOf(k), np = c.ps.length, hol = holiday(k);
@@ -877,13 +878,23 @@ async function renderHist(){
   }).join('') : '<li class="empty">Nenhum dia neste mês.</li>';
   if (!isG()) renderMyReqs();
 }
+// Banco acumulado (desde o início do controle + lançamentos) até o fim do mês exibido no Histórico.
+// Só calcula com todos os meses e os lançamentos já carregados; senão mostra "…" até renderMeses terminar de carregar.
+function setAcumulado(uid){
+  const el = $('s-banco'), tk = todayKey(), ini = profOf(uid)?.inicio || tk;
+  const fim = monthEnd(S.month) < tk ? monthEnd(S.month) : tk;
+  if (fim < ini){ el.textContent = fmtSaldo(lancSum(uid, null, fim)); el.className = 'v num ' + cls(lancSum(uid, null, fim)); return; }
+  const pronto = U(uid).lanc && monthsBetween(ini, fim).every(m => U(uid).months.has(m));
+  if (!pronto){ el.textContent = '…'; el.className = 'v num'; return; }
+  const v = sumRange(uid, ini, fim).b + lancSum(uid, null, fim);
+  el.textContent = fmtSaldo(v); el.className = 'v num ' + cls(v);
+}
 let mesTok = 0;
 async function renderMeses(uid){
   const card = $('mes-card'), my = ++mesTok, tk = todayKey(), p = profOf(uid), ini = p.inicio || tk;
   try { await Promise.all([ensureLanc(uid), ensureRange(uid, minK(ini, tk), tk)]); } catch (e){ card.hidden = true; return; }
   if (my !== mesTok || histUid() !== uid) return;
-  const fimMes = monthEnd(S.month) < tk ? monthEnd(S.month) : tk;
-  $('s-acum').textContent = S.month >= ini.slice(0, 7) ? `Acumulado: ${fmtSaldo(sumRange(uid, ini, fimMes).b + lancSum(uid, null, fimMes))}` : '';
+  setAcumulado(uid);
   const meses = monthsBetween(minK(ini, tk), tk).reverse();
   card.hidden = !meses.length;
   $('mes-list').innerHTML = meses.map(m => {
