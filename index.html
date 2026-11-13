@@ -395,7 +395,6 @@ const WDL = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-fei
 const MES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 const TYPES = {normal:'Dia normal', feriado:'Feriado', folga:'Folga', ferias:'Férias', atestado:'Atestado / abono'};
 const FUSOS = {'America/Sao_Paulo':'Brasília (UTC−3)', 'America/Manaus':'AM, MT, MS, RO, RR (UTC−4)', 'America/Rio_Branco':'Acre (UTC−5)', 'America/Noronha':'Fernando de Noronha (UTC−2)'};
-const LABELS = ['Entrada','Saída intervalo','Retorno intervalo','Saída'];
 const ACOES = {incluir:'Incluir marcação', alterar:'Alterar horário', remover:'Remover marcação', tipo_dia:'Alterar tipo do dia'};
 const ERR = {
   nao_autenticado:'Sessão expirada. Entre novamente.', usuario_inativo:'Seu usuário está inativo. Fale com o gestor.',
@@ -426,7 +425,8 @@ const addDays = (k, n) => { const d = dateOf(k); d.setDate(d.getDate()+n); retur
 const monthEnd = m => { const [y, mm] = m.split('-').map(Number); return keyOf(new Date(y, mm, 0)); };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const validT = t => /^\d{2}:\d{2}$/.test(t || '');
-const labelFor = i => i < 4 ? LABELS[i] : (i % 2 === 0 ? 'Entrada extra' : 'Saída extra');
+// Marcações alternam entrada/saída (a equipe marca só entrada e saída; o intervalo mínimo é descontado no cálculo)
+const labelFor = i => i % 2 === 0 ? 'Entrada' : 'Saída';
 function eachDay(from, to, fn){ for (let k = from; k <= to; k = addDays(k, 1)) fn(k); }
 function monthsBetween(a, b){ const out = []; let [y, m] = a.slice(0, 7).split('-').map(Number); const end = b.slice(0, 7); for (;;){ const s = `${y}-${pad(m)}`; out.push(s); if (s >= end) break; m++; if (m > 12){ m = 1; y++; } } return out; }
 function hav(a, b, c, d){ const R = 6371000, r = x => x*Math.PI/180; const s = Math.sin(r(c-a)/2)**2 + Math.cos(r(a))*Math.cos(r(c))*Math.sin(r(d-b)/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
@@ -1027,8 +1027,8 @@ function renderTeam(){
     const ps = S.teamToday[p.id] || [], n = ps.length, tipoHoje = S.teamStatus?.[p.id], exp = holiday(tk) || tipoHoje ? 0 : Number(p.jornada[dateOf(tk).getDay()]) || 0;
     let st, cl;
     if (!n){ st = tipoHoje ? TYPES[tipoHoje] : exp ? 'Sem marcação hoje' : 'Sem expediente hoje'; cl = ''; if (exp) none++; }
-    else if (n % 2 === 1){ st = `${n === 3 ? 'Retornou' : n === 1 ? 'Trabalhando desde' : 'Em atividade desde'} ${ps[n-1].t}`; cl = 'on'; on++; }
-    else { st = `${n === 2 ? 'Em intervalo / saiu' : 'Encerrou'} às ${ps[n-1].t}`; cl = n === 2 ? 'pause' : 'out'; out++; }
+    else if (n % 2 === 1){ st = `Trabalhando desde ${ps[n-1].t}`; cl = 'on'; on++; }
+    else { st = `Saiu às ${ps[n-1].t}`; cl = 'out'; out++; }
     const last = ps[n-1], loc = last ? localOf(last) : '';
     const pend = S.pending.filter(r => r.user_id === p.id).length;
     return `<li class="li" data-member="${p.id}"><div><div class="main"><span class="dotst ${cl}"></span>${esc(p.nome)}</div>
