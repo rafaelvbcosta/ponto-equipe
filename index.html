@@ -211,6 +211,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
         <div><div class="note">Banco no mês</div><div class="big num" id="h-month">0:00</div></div>
         <div><div class="note">Banco acumulado desde <span id="h-since"></span></div><div class="big num" id="h-acc">0:00</div></div>
       </div>
+      <div class="note" id="h-lanc" style="margin-top:8px" hidden></div>
       <div class="note" style="margin-top:10px">Extras pagas no mês: <b class="num" id="h-paga">0:00</b> <span id="h-regra"></span><br>Extras 100% (domingos e feriados) no mês: <b class="num" id="h-p100">0:00</b></div>
       <div class="banner" id="h-pending" style="margin:12px 0 0" hidden></div>
     </div>
@@ -233,6 +234,21 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <div class="stat"><div class="k">Extras pagas</div><div class="v num" id="s-paga">0:00</div><div class="note num" id="s-p100"></div></div>
     </div>
     <div class="card" style="padding:4px 12px"><ul class="list" id="m-days"></ul></div>
+    <div class="card" id="lanc-card" hidden>
+      <div class="row-between"><h2 style="margin:0">Banco de horas</h2><span class="big num" id="lanc-total"></span></div>
+      <div class="note" id="lanc-sub" style="margin-top:4px"></div>
+      <h3>Lançamentos manuais</h3>
+      <ul class="list" id="lanc-list"></ul>
+      <div id="lanc-form" hidden>
+        <h3>Lançar horas no banco</h3>
+        <div class="grid2"><div><label class="f" for="lc-tipo" style="margin-top:0">Tipo</label><select id="lc-tipo"><option value="1">Crédito (+)</option><option value="-1">Débito (−)</option></select></div>
+          <div><label class="f" for="lc-horas" style="margin-top:0">Horas (hh:mm)</label><input id="lc-horas" inputmode="numeric" placeholder="32:30" autocomplete="off"></div></div>
+        <label class="f" for="lc-dia">Data de referência</label><input type="date" id="lc-dia">
+        <label class="f" for="lc-mot">Motivo</label><input id="lc-mot" placeholder="Ex.: saldo do banco anterior ao app" autocomplete="off">
+        <button class="btn primary full" style="margin-top:12px" id="lc-add">Lançar no banco</button>
+        <div class="note" style="margin-top:8px">Saldo de antes do app: use como data o dia anterior ao início do controle. Horas pagas ou folga compensada: use Débito. O lançamento entra direto no saldo, sem tolerância nem limite diário.</div>
+      </div>
+    </div>
     <div class="card">
       <h2>Lançar ou corrigir outro dia</h2>
       <div class="note" id="pick-note">Esqueceu de marcar? Abra o dia e envie uma solicitação de ajuste ao gestor.</div>
@@ -381,7 +397,7 @@ const ERR = {
   hora_futura:'O horário informado ainda não chegou.', hora_obrigatoria:'Informe o horário.', tipo_invalido:'Dados inválidos.',
   data_invalida:'Data inválida.', solicitacao_invalida:'Esta solicitação já foi tratada.', solicitacao_repetida:'Você já tem uma solicitação igual aguardando aprovação.',
   sem_permissao:'Sem permissão para esta ação.', ultimo_gestor:'É preciso manter pelo menos um gestor ativo.', dados_invalidos:'Dados inválidos.',
-  usuario_inexistente:'Usuário não encontrado.', coordenadas_invalidas:'Localização inválida.',
+  usuario_inexistente:'Usuário não encontrado.', coordenadas_invalidas:'Localização inválida.', lancamento_nao_encontrado:'Lançamento não encontrado (pode já ter sido removido).',
   'Invalid login credentials':'E-mail ou senha incorretos.', 'Failed to fetch':'Sem conexão com o servidor. Verifique a internet.'
 };
 function errMsg(e){ const m = e?.message || e?.erro || String(e || 'Erro'); for (const k in ERR) if (m.includes(k)) return ERR[k]; return m; }
@@ -431,10 +447,27 @@ const S = {
   teamToday:{}, pending:[], myReqs:[], view:'hoje', month:null, target:null, rMode:'month', lastKey:null, gpsState:''
 };
 const C = {};
-const U = uid => C[uid] || (C[uid] = {months:new Set(), punches:{}, status:{}, reqs:{}, hist:{}});
+const U = uid => C[uid] || (C[uid] = {months:new Set(), punches:{}, status:{}, reqs:{}, hist:{}, lanc:null});
+// Lançamentos manuais no banco de horas (todos de uma vez: são poucos por pessoa)
+async function ensureLanc(uid, force){
+  const u = U(uid); if (u.lanc && !force) return;
+  u.lanc = await fetchAll(() => sb.from('banco_lancamentos').select('*').eq('user_id', uid).eq('removido', false).order('dia').order('created_at'));
+}
+const lancDe = (uid, from, to) => (U(uid).lanc || []).filter(l => (!from || l.dia >= from) && (!to || l.dia <= to));
+const lancSum = (uid, from, to) => lancDe(uid, from, to).reduce((n, l) => n + l.minutos, 0);
+// Extrato do banco: precisa de ensureRange(uid, início do controle, to) e ensureLanc(uid)
+function extrato(uid, from, to){
+  const ini = profOf(uid)?.inicio || from, antesDe = addDays(from, -1);
+  const ant = (from > ini ? sumRange(uid, ini, antesDe).b : 0) + lancSum(uid, null, antesDe);
+  const dias = sumRange(uid, from, to).b, lanc = lancSum(uid, from, to);
+  return {ant, dias, lanc, fim:ant + dias + lanc};
+}
+const minK = (a, b) => (a < b ? a : b);
 const isG = () => S.me?.role === 'gestor';
 const profOf = uid => (uid === S.me?.id ? S.me : S.team.find(p => p.id === uid)) || S.me;
 const nameOf = uid => profOf(uid)?.nome || '—';
+// Autor de uma alteração: o colaborador não enxerga os outros perfis, então quem não é ele aparece como "Gestor"
+const autorOf = id => !id ? '—' : id === S.me?.id ? S.me.nome : (S.team.find(p => p.id === id)?.nome || 'Gestor');
 
 async function fetchAll(build){
   let out = [], from = 0;
@@ -609,7 +642,7 @@ async function enterApp(){
     if (cfg.data) S.cfg = cfg.data;
     S.locais = loc.data || [];
     if (isG()) await loadTeam();
-    await Promise.all([ensureRange(S.me.id, S.me.inicio < S.month + '-01' ? S.me.inicio : S.month + '-01', todayKey()), loadMyReqs(), isG() ? loadPending() : null]);
+    await Promise.all([ensureRange(S.me.id, S.me.inicio < S.month + '-01' ? S.me.inicio : S.month + '-01', todayKey()), loadMyReqs(), isG() ? loadPending() : null, ensureLanc(S.me.id)]);
   } catch (e){ showBanner('Não consegui carregar todos os dados: ' + errMsg(e)); }
   route();
   pushInit().then(() => render());
@@ -680,8 +713,11 @@ function renderToday(){
     (pend ? `<li><span class="lbl">Ajustes aguardando aprovação</span><span class="tag">${pend}</span></li>` : '');
   const ini = S.me.inicio || tk, m0 = tk.slice(0, 8) + '01';
   const m = sumRange(uid, m0 > ini ? m0 : ini, tk), acc = sumRange(uid, ini, tk);
-  $('h-month').textContent = fmtSaldo(m.b); $('h-month').className = 'big num ' + cls(m.b);
-  $('h-acc').textContent = fmtSaldo(acc.b); $('h-acc').className = 'big num ' + cls(acc.b);
+  const mb = m.b + lancSum(uid, m0, tk), lt = lancSum(uid, null, tk), ab = acc.b + lt;
+  $('h-month').textContent = fmtSaldo(mb); $('h-month').className = 'big num ' + cls(mb);
+  $('h-acc').textContent = fmtSaldo(ab); $('h-acc').className = 'big num ' + cls(ab);
+  $('h-lanc').hidden = !lancDe(uid, null, tk).length;
+  $('h-lanc').innerHTML = `Inclui lançamentos manuais do gestor: <b class="num">${fmtSaldo(lt)}</b> (detalhes no Histórico).`;
   $('h-paga').textContent = fmtDur(m.pg); $('h-p100').textContent = fmtDur(m.p100);
   $('h-regra').textContent = `(o que passa de ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))}/dia em dias normais)`;
   $('h-since').textContent = fmtDate(ini);
@@ -748,11 +784,13 @@ async function renderHist(){
   if (!loaded) $('m-days').innerHTML = '<li class="empty"><span class="spin"></span>Carregando…</li>';
   try { await ensureRange(uid, first, last); } catch (e){ $('m-days').innerHTML = `<li class="empty">${esc(errMsg(e))}</li>`; return; }
   if (histUid() !== uid || S.view !== 'historico') return;
+  renderLanc(uid);
   const keys = []; eachDay(first, last, k => { if (k <= tk || U(uid).punches[k] || U(uid).status[k]) keys.push(k); });
   keys.reverse();
   const sm = sumRange(uid, first, last < tk ? last : tk);
   $('s-worked').textContent = fmtDur(sm.w); $('s-paga').textContent = fmtDur(sm.pg); $('s-p100').textContent = sm.p100 ? `+ ${fmtDur(sm.p100)} a 100%` : '';
-  $('s-saldo').textContent = fmtSaldo(sm.b); $('s-saldo').className = 'v num ' + cls(sm.b);
+  const smb = sm.b + lancSum(uid, first, last < tk ? last : tk);
+  $('s-saldo').textContent = fmtSaldo(smb); $('s-saldo').className = 'v num ' + cls(smb);
   const reqs = Object.values(U(uid).reqs);
   $('m-days').innerHTML = keys.length ? keys.map(k => {
     const c = calc(uid, k), d = dateOf(k), np = c.ps.length, hol = holiday(k);
@@ -773,6 +811,57 @@ async function renderHist(){
       <div class="r"><div class="w num">${np ? fmtDur(c.worked) : ''}</div><div class="num ${cls(c.saldo)}">${c.counts && (c.exp || c.worked) ? fmtSaldo(c.saldo) : ''}</div></div></li>`;
   }).join('') : '<li class="empty">Nenhum dia neste mês.</li>';
   if (!isG()) renderMyReqs();
+}
+let lancTok = 0;
+async function renderLanc(uid){
+  const card = $('lanc-card'), my = ++lancTok, tk = todayKey(), p = profOf(uid);
+  try { await Promise.all([ensureLanc(uid), ensureRange(uid, minK(p.inicio || tk, tk), tk)]); } catch (e){ card.hidden = true; return; }
+  if (my !== lancTok || histUid() !== uid) return;
+  const ls = lancDe(uid, null, null);
+  card.hidden = !isG() && !ls.length;
+  if (card.hidden) return;
+  const total = sumRange(uid, p.inicio || tk, tk).b + lancSum(uid, null, tk);
+  $('lanc-total').textContent = fmtSaldo(total); $('lanc-total').className = 'big num ' + cls(total);
+  $('lanc-sub').textContent = `Saldo total de ${p.nome.split(' ')[0]} hoje: dias desde ${fmtDate(p.inicio || tk)} + lançamentos manuais (${fmtSaldo(lancSum(uid, null, tk))}).`;
+  $('lanc-list').innerHTML = ls.length ? ls.slice().reverse().map(l => `<li class="li" style="cursor:default"><div><div class="main num ${cls(l.minutos)}">${fmtSaldo(l.minutos)} <span class="sub" style="display:inline">· ${fmtDate(l.dia)}</span></div>
+      <div class="sub">${esc(l.motivo)} · por ${esc(autorOf(l.created_by))} em ${fmtTs(l.created_at)}</div></div>${isG() ? `<button class="btn sm danger" data-del-lanc="${l.id}">Remover</button>` : ''}</li>`).join('')
+    : '<li class="empty">Nenhum lançamento manual.</li>';
+  $('lanc-form').hidden = !isG();
+  if (isG() && $('lanc-form').dataset.uid !== uid){
+    $('lanc-form').dataset.uid = uid;
+    $('lc-tipo').value = '1'; $('lc-horas').value = ''; $('lc-mot').value = '';
+    $('lc-dia').value = ls.length ? tk : addDays(p.inicio || tk, -1); $('lc-dia').max = tk;
+  }
+}
+function parseHoras(v){
+  const m = /^\s*(\d{1,4})(?:\s*[:h]\s*([0-5]?\d))?\s*$/i.exec(String(v || ''));
+  return m ? Number(m[1]) * 60 + Number(m[2] || 0) : null;
+}
+async function addLanc(btn){
+  const uid = histUid(), p = profOf(uid), h = parseHoras($('lc-horas').value), dia = $('lc-dia').value, mot = $('lc-mot').value.trim();
+  if (!h) return toast('Informe as horas no formato hh:mm (ex.: 32:30).');
+  if (!dia) return toast('Informe a data de referência.');
+  if (dia > todayKey()) return toast('A data não pode ser futura.');
+  if (mot.length < 3) return toast(ERR.motivo_obrigatorio);
+  const min = h * Number($('lc-tipo').value);
+  if (!(await ask('Lançar no banco?', `${fmtSaldo(min)} no banco de horas de ${p.nome}, com data de ${fmtDate(dia)}. Motivo: ${mot}`, 'Lançar'))) return;
+  setBusyBtn(btn, true, 'Lançando…');
+  const {error} = await sb.rpc('gestor_lancar_banco', {p_user:uid, p_dia:dia, p_minutos:min, p_motivo:mot});
+  setBusyBtn(btn, false);
+  if (error) return toast(errMsg(error), 5000);
+  $('lc-horas').value = ''; $('lc-mot').value = '';
+  invalidate(uid, dia); await ensureLanc(uid, true);
+  toast(`Lançado ${fmtSaldo(min)} no banco de ${p.nome.split(' ')[0]}.`); render();
+}
+async function delLanc(id){
+  const uid = histUid(), l = (U(uid).lanc || []).find(x => x.id === id); if (!l) return;
+  const mot = await askText('Remover lançamento?', `Motivo da remoção de ${fmtSaldo(l.minutos)} (${l.motivo})`, 'Remover');
+  if (mot === null) return;
+  if (mot.length < 3) return toast(ERR.motivo_obrigatorio);
+  const {error} = await sb.rpc('gestor_remover_lancamento', {p_id:id, p_motivo:mot});
+  if (error) return toast(errMsg(error), 5000);
+  invalidate(uid, l.dia); await ensureLanc(uid, true);
+  toast('Lançamento removido.'); render();
 }
 async function loadMyReqs(){
   const {data} = await sb.from('requests').select('*').eq('user_id', S.me.id).order('created_at', {ascending:false}).limit(15);
@@ -824,7 +913,7 @@ function renderSheet(){
       ${G ? `<label class="f" for="f-obs">Observação do dia</label><input id="f-obs" value="${esc(c.obs)}">` : ''}</div>
     <label class="f" for="f-motivo">Motivo</label><textarea id="f-motivo" placeholder="Ex.: esqueci de marcar a saída; visita técnica sem sinal…"></textarea>
     <button class="btn primary full" style="margin-top:12px" data-act="submit">${G ? 'Aplicar ajuste' : 'Enviar solicitação'}</button>` : ''}
-    ${hist.length ? `<details><summary>Histórico de alterações (${hist.length})</summary><ul>${hist.slice().reverse().map(h => `<li>${fmtTs(h.created_at)} · ${esc(nameOf(h.autor))}: ${esc(h.detalhe || h.acao)}</li>`).join('')}</ul></details>` : ''}`;
+    ${hist.length ? `<details><summary>Histórico de alterações (${hist.length})</summary><ul>${hist.slice().reverse().map(h => `<li>${fmtTs(h.created_at)} · ${esc(autorOf(h.autor))}: ${esc(h.detalhe || h.acao)}</li>`).join('')}</ul></details>` : ''}`;
   syncForm();
 }
 function syncForm(){
@@ -942,13 +1031,14 @@ function buildReport(uid, from, to){
     if (c.open && ps.length && k < tk) obs.push('Marcação ímpar');
     if (c.autoInt) obs.push(`Intervalo descontado ${fmtDur(c.autoInt)}`);
     if (c.obs) obs.push(c.obs);
+    lancDe(uid, k, k).forEach(l => obs.push(`Lançamento no banco ${fmtSaldo(l.minutos)} (${l.motivo})`));
     if (c.counts){ w += c.worked; e += c.exp; s += c.saldo; b += c.banco; pg += c.paga; p100 += c.paga100; }
     adj += ps.filter(p => p.origem !== 'app' || p.hora_original).length; nogps += c.noGps;
     const locs = [...new Set(ps.map(localOf))];
     rows.push({k, wd:WD[d.getDay()], main, extras:extras.join(' '), worked:ps.length ? c.worked : null, exp:c.counts ? c.exp : null,
       saldo:c.counts ? c.saldo : null, banco:c.counts ? c.banco : null, paga:c.counts ? c.paga : null, paga100:c.counts ? c.paga100 : null, obs:obs.join(' · '), locs:locs.join(' / '), edited:c.edited, off:c.exp === 0, ps});
   });
-  return {uid, from, to, rows, w, e, s, b, pg, p100, adj, nogps, faltas};
+  return {uid, from, to, rows, w, e, s, b, pg, p100, adj, nogps, faltas, ex:extrato(uid, from, to)};
 }
 let repToken = 0;
 async function renderReport(){
@@ -960,13 +1050,16 @@ async function renderReport(){
   if (!P){ $('r-info').textContent = 'Escolha as datas do intervalo.'; return; }
   const my = ++repToken, uids = reportUids();
   $('r-info').innerHTML = '<span class="spin"></span>Calculando…';
-  try { for (const uid of uids) await ensureRange(uid, P.from, P.to); } catch (e){ $('r-info').textContent = errMsg(e); return; }
+  try { for (const uid of uids) await ensureReport(uid, P); } catch (e){ $('r-info').textContent = errMsg(e); return; }
   if (my !== repToken) return;
   const Rs = uids.map(uid => buildReport(uid, P.from, P.to));
-  const tot = Rs.reduce((a, r) => ({w:a.w + r.w, b:a.b + r.b, pg:a.pg + r.pg, p100:a.p100 + r.p100, adj:a.adj + r.adj, ng:a.ng + r.nogps, f:a.f + r.faltas}), {w:0, b:0, pg:0, p100:0, adj:0, ng:0, f:0});
+  const tot = Rs.reduce((a, r) => ({w:a.w + r.w, b:a.b + r.b + r.ex.lanc, pg:a.pg + r.pg, p100:a.p100 + r.p100, adj:a.adj + r.adj, ng:a.ng + r.nogps, f:a.f + r.faltas}), {w:0, b:0, pg:0, p100:0, adj:0, ng:0, f:0});
   $('r-worked').textContent = fmtDur(tot.w); $('r-paga').textContent = fmtDur(tot.pg); $('r-p100').textContent = tot.p100 ? `+ ${fmtDur(tot.p100)} a 100%` : '';
   $('r-saldo').textContent = fmtSaldo(tot.b); $('r-saldo').className = 'v num ' + cls(tot.b);
-  $('r-info').textContent = `${fmtDate(P.from)} a ${fmtDate(P.to)} · ${uids.length > 1 ? uids.length + ' pessoas · ' : ''}${tot.f} falta(s) · ${tot.adj} marcação(ões) ajustada(s) · ${tot.ng} sem GPS. O Excel inclui o espelho, todas as marcações com coordenadas e o histórico de ajustes.`;
+  $('r-info').textContent = `${fmtDate(P.from)} a ${fmtDate(P.to)} · ${uids.length > 1 ? uids.length + ' pessoas · ' : ''}${tot.f} falta(s) · ${tot.adj} marcação(ões) ajustada(s) · ${tot.ng} sem GPS. ${Rs.length === 1 ? `Banco: saldo anterior ${fmtSaldo(Rs[0].ex.ant)}, saldo final ${fmtSaldo(Rs[0].ex.fim)}. ` : ''}O Excel inclui o espelho, todas as marcações com coordenadas e o histórico de ajustes.`;
+}
+async function ensureReport(uid, P){
+  await Promise.all([ensureRange(uid, minK(profOf(uid)?.inicio || P.from, P.from), P.to), ensureLanc(uid)]);
 }
 const loadedS = {};
 function loadScript(src){
@@ -986,7 +1079,7 @@ const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').repla
 async function prepReport(){
   const P = reportPeriod(); if (!P) throw new Error('Escolha o período.');
   const uids = reportUids();
-  for (const uid of uids) await ensureRange(uid, P.from, P.to);
+  for (const uid of uids) await ensureReport(uid, P);
   return {P, uids, Rs:uids.map(uid => buildReport(uid, P.from, P.to))};
 }
 async function exportXlsx(btn){
@@ -999,10 +1092,10 @@ async function exportXlsx(btn){
     const fmtCells = (ws, r0, r1, cols, z) => { for (let r = r0; r <= r1; r++) cols.forEach(c => { const a = X.utils.encode_cell({r, c}); if (ws[a] && ws[a].t === 'n') ws[a].z = z; }); };
     if (Rs.length > 1){
       const aoa = [['Resumo da equipe'], ['Empresa', S.cfg.empresa || ''], ['Período', `${fmtDate(P.from)} a ${fmtDate(P.to)}`], ['Gerado em', new Date().toLocaleString('pt-BR')], [],
-        ['Nome','Matrícula','Trabalhado','Previsto','Banco de horas','Banco (min)','Extras pagas','Extras pagas (min)','Extras 100%','Extras 100% (min)','Faltas','Marcações ajustadas','Marcações sem GPS']];
-      Rs.forEach(R => { const p = profOf(R.uid); aoa.push([p.nome, p.matricula || '', R.w/1440, R.e/1440, fmtSaldo(R.b), R.b, R.pg/1440, R.pg, R.p100/1440, R.p100, R.faltas, R.adj, R.nogps]); });
+        ['Nome','Matrícula','Trabalhado','Previsto','Banco dos dias','Banco dos dias (min)','Extras pagas','Extras pagas (min)','Extras 100%','Extras 100% (min)','Faltas','Marcações ajustadas','Marcações sem GPS','Saldo anterior','Lançamentos manuais','Saldo final do banco','Saldo final (min)']];
+      Rs.forEach(R => { const p = profOf(R.uid); aoa.push([p.nome, p.matricula || '', R.w/1440, R.e/1440, fmtSaldo(R.b), R.b, R.pg/1440, R.pg, R.p100/1440, R.p100, R.faltas, R.adj, R.nogps, fmtSaldo(R.ex.ant), fmtSaldo(R.ex.lanc), fmtSaldo(R.ex.fim), R.ex.fim]); });
       const ws = X.utils.aoa_to_sheet(aoa); fmtCells(ws, 6, aoa.length - 1, [2, 3, 6, 8], '[h]:mm');
-      ws['!cols'] = [{wch:30},{wch:12},{wch:11},{wch:10},{wch:14},{wch:11},{wch:12},{wch:17},{wch:12},{wch:17},{wch:7},{wch:18},{wch:17}];
+      ws['!cols'] = [{wch:30},{wch:12},{wch:11},{wch:10},{wch:14},{wch:11},{wch:12},{wch:17},{wch:12},{wch:17},{wch:7},{wch:18},{wch:17},{wch:14},{wch:19},{wch:19},{wch:16}];
       X.utils.book_append_sheet(wb, ws, sheetName('Resumo'));
     }
     Rs.forEach(R => {
@@ -1017,6 +1110,12 @@ async function exportXlsx(btn){
         r.edited ? 'Sim' : '', r.locs, r.obs]));
       aoa.push([]); const rt = aoa.length;
       aoa.push(['Totais', '', null, null, null, null, '', R.w/1440, R.e/1440, fmtSaldo(R.s), fmtSaldo(R.b), R.b, R.pg/1440, R.p100/1440, '', '', '']);
+      aoa.push([]);
+      aoa.push(['Banco de horas']);
+      aoa.push(['Saldo anterior', fmtSaldo(R.ex.ant), R.ex.ant]);
+      aoa.push(['Banco dos dias do período', fmtSaldo(R.ex.dias), R.ex.dias]);
+      aoa.push(['Lançamentos manuais no período', fmtSaldo(R.ex.lanc), R.ex.lanc]);
+      aoa.push(['Saldo final do banco', fmtSaldo(R.ex.fim), R.ex.fim]);
       const ws = X.utils.aoa_to_sheet(aoa);
       fmtCells(ws, r0, rt, [2, 3, 4, 5], 'hh:mm'); fmtCells(ws, r0, rt, [7, 8, 12, 13], '[h]:mm');
       ws['!cols'] = [{wch:11},{wch:5},{wch:9},{wch:14},{wch:16},{wch:9},{wch:14},{wch:11},{wch:10},{wch:11},{wch:9},{wch:11},{wch:12},{wch:11},{wch:7},{wch:28},{wch:36}];
@@ -1035,7 +1134,7 @@ async function exportXlsx(btn){
     wsm['!cols'] = [{wch:26},{wch:11},{wch:7},{wch:17},{wch:20},{wch:12},{wch:28},{wch:11},{wch:11},{wch:11},{wch:11}];
     X.utils.book_append_sheet(wb, wsm, sheetName('Marcações'));
     const la = [['Nome','Data','Registrado em','Feito por','Alteração']];
-    Rs.forEach(R => R.rows.forEach(r => (U(R.uid).hist[r.k] || []).forEach(h => la.push([profOf(R.uid).nome, fmtDate(r.k), fmtTs(h.created_at), nameOf(h.autor), h.detalhe || h.acao]))));
+    Rs.forEach(R => R.rows.forEach(r => (U(R.uid).hist[r.k] || []).forEach(h => la.push([profOf(R.uid).nome, fmtDate(r.k), fmtTs(h.created_at), autorOf(h.autor), h.detalhe || h.acao]))));
     if (la.length === 1) la.push(['', '', '', '', 'Nenhum ajuste no período']);
     const wsa = X.utils.aoa_to_sheet(la); wsa['!cols'] = [{wch:26},{wch:11},{wch:16},{wch:22},{wch:70}];
     X.utils.book_append_sheet(wb, wsa, sheetName('Ajustes'));
@@ -1078,9 +1177,14 @@ async function exportPdf(btn){
         }
       });
       let y = doc.lastAutoTable.finalY + 6;
-      if (y + (sign ? 32 : 12) > H - 12){ doc.addPage(); y = 18; }
+      if (y + (sign ? 38 : 18) > H - 12){ doc.addPage(); y = 18; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30);
+      doc.text(`Banco de horas: saldo anterior ${fmtSaldo(R.ex.ant)}  +  dias do período ${fmtSaldo(R.ex.dias)}  +  lançamentos manuais ${fmtSaldo(R.ex.lanc)}  =  saldo final ${fmtSaldo(R.ex.fim)}`, 10, y);
+      doc.setFont('helvetica', 'normal'); y += 6;
       doc.setFontSize(7.8); doc.setTextColor(90);
-      doc.text(`* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min. Intervalo mínimo: ${Number(S.cfg.intervalo_min ?? 60)} min. Até ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra por dia vão para o banco; o excedente é pago. Domingos e feriados: tudo extra a 100%.`, 10, y);
+      const rodape = `* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min. Intervalo mínimo: ${Number(S.cfg.intervalo_min ?? 60)} min. Até ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra por dia vão para o banco; o excedente é pago. Domingos e feriados: tudo extra a 100%.`;
+      const nota = doc.splitTextToSize(rodape, W - 20);
+      doc.text(nota, 10, y); y += (nota.length - 1) * 3.4;
       doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')} - controle de jornada da equipe. Coordenadas de cada marcação no relatório Excel.`, 10, y + 4.2);
       if (sign){
         y += 22; doc.setDrawColor(120); doc.setLineWidth(0.3);
@@ -1377,6 +1481,7 @@ function bind(){
     const can = t.closest('[data-cancel]'); if (can) return cancelReq(can.dataset.cancel);
     const usr = t.closest('#u-list [data-user]'); if (usr) return openUser(usr.dataset.user);
     const dl = t.closest('[data-del-loc]'); if (dl) return delLocal(dl.dataset.delLoc);
+    const dlc = t.closest('[data-del-lanc]'); if (dlc) return delLanc(dlc.dataset.delLanc);
     const act = t.closest('#sheet [data-act]');
     if (act){
       const a = act.dataset.act;
@@ -1416,11 +1521,12 @@ function bind(){
     $('loc-lat').value = p.lat.toFixed(6); $('loc-lng').value = p.lng.toFixed(6); toast(`Posição capturada (±${Math.round(p.acc)} m).`);
   });
   $('cfg-save').addEventListener('click', e => saveCfg(e.currentTarget));
+  $('lc-add').addEventListener('click', e => addLanc(e.currentTarget));
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible' || !S.me || !$('scr-app').classList.contains('on')) return;
     try {
       invalidate(S.me.id, todayKey());
-      await Promise.all([ensureRange(S.me.id, todayKey(), todayKey()), isG() ? loadTeam() : loadMyReqs(), isG() ? loadPending() : null]);
+      await Promise.all([ensureLanc(S.me.id, true), ensureRange(S.me.id, todayKey(), todayKey()), isG() ? loadTeam() : loadMyReqs(), isG() ? loadPending() : null]);
       if (S.view === 'historico') invalidate(histUid(), S.month + '-01');
       render();
     } catch (e) {}
