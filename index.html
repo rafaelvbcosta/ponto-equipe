@@ -213,7 +213,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
         <div><div class="note">Banco acumulado desde <span id="h-since"></span></div><div class="big num" id="h-acc">0:00</div></div>
       </div>
       <div class="note" id="h-lanc" style="margin-top:8px" hidden></div>
-      <div class="note" style="margin-top:10px">Extras pagas no mês: <b class="num" id="h-paga">0:00</b> <span id="h-regra"></span><br>Das quais em domingos e feriados (100%): <b class="num" id="h-p100">0:00</b><br>As extras pagas recomeçam do zero a cada mês; o banco de horas é acumulado.</div>
+      <div class="note" style="margin-top:10px">Extras pagas no mês (100%): <b class="num" id="h-paga">0:00</b> <span id="h-regra"></span><br>As extras pagas recomeçam do zero a cada mês; o banco de horas é acumulado.</div>
       <div class="banner" id="h-pending" style="margin:12px 0 0" hidden></div>
     </div>
   </section>
@@ -232,7 +232,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
     <div class="stats">
       <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="s-worked">0:00</div></div>
       <div class="stat"><div class="k">Banco acumulado</div><div class="v num" id="s-banco">…</div><div class="note num" id="s-mes"></div></div>
-      <div class="stat"><div class="k">Extras pagas</div><div class="v num" id="s-paga">0:00</div><div class="note num" id="s-p100"></div></div>
+      <div class="stat"><div class="k">Extras pagas</div><div class="v num" id="s-paga">0:00</div><div class="note">a 100%</div></div>
     </div>
     <div class="card" style="padding:4px 12px"><ul class="list" id="m-days"></ul></div>
     <div class="card" id="lanc-card" hidden>
@@ -307,7 +307,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
     <div class="stats">
       <div class="stat"><div class="k">Trabalhado</div><div class="v num" id="r-worked">—</div></div>
       <div class="stat"><div class="k">Banco</div><div class="v num" id="r-saldo">—</div></div>
-      <div class="stat"><div class="k">Extras pagas</div><div class="v num" id="r-paga">—</div><div class="note num" id="r-p100"></div></div>
+      <div class="stat"><div class="k">Extras pagas</div><div class="v num" id="r-paga">—</div><div class="note">a 100%</div></div>
     </div>
     <div class="card">
       <div class="note" id="r-info">Calculando…</div>
@@ -353,7 +353,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <div class="grid2"><div><label class="f" for="cfg-tol">Tolerância diária (min)</label><input id="cfg-tol" type="number" min="0" max="120" inputmode="numeric"></div>
       <div><label class="f" for="cfg-int">Intervalo mínimo (min)</label><input id="cfg-int" type="number" min="0" max="240" inputmode="numeric"></div></div>
       <label class="f" for="cfg-lim">Máximo diário de horas extras para o banco (min)</label><input id="cfg-lim" type="number" min="0" max="720" inputmode="numeric">
-      <div class="note" style="margin-top:6px">Exemplo: 120 = as 2 primeiras horas extras do dia vão para o banco e o restante é pago, em qualquer dia (semana, sábado, domingo ou feriado). O que for pago em domingo ou feriado aparece separado como extra 100%. Faltas e atrasos sempre descontam do banco.</div>
+      <div class="note" style="margin-top:6px">Exemplo: 120 = as 2 primeiras horas extras do dia vão para o banco e o restante é pago como extra a 100%, em qualquer dia (semana, sábado, domingo ou feriado). Faltas e atrasos sempre descontam do banco.</div>
       <div class="note" style="margin-top:6px">Em dias com mais de 6h trabalhadas, se o intervalo não for marcado ou for menor que o mínimo, a diferença é descontada automaticamente (CLT art. 71). Use 0 para desligar.</div>
       <label class="chk"><input type="checkbox" id="cfg-fer"> Considerar feriados nacionais automaticamente</label>
       <label class="chk"><input type="checkbox" id="cfg-gps"> Exigir localização para registrar o ponto</label>
@@ -576,15 +576,13 @@ function calc(uid, k, live){
   let saldo = counts ? worked - exp : 0;
   if (counts && Math.abs(saldo) <= (Number(S.cfg.tolerancia) || 0)) saldo = 0;
   const lim = Math.max(0, Number(S.cfg.limite_banco_dia ?? 120));
-  // Regra única para todos os dias (semana, sábado, domingo e feriado): as primeiras `lim` min de extra vão para o banco,
-  // o excedente é pago. O excedente de domingo/feriado sem jornada prevista fica separado em paga100 (pago a 100%).
-  const dom100 = exp === 0 && (dateOf(k).getDay() === 0 || !!holiday(k, uid) || dayType(uid, k) === 'feriado');
-  const banco = saldo > 0 ? Math.min(saldo, lim) : saldo, exc = saldo > 0 ? saldo - banco : 0;
-  const paga = dom100 ? 0 : exc, paga100 = dom100 ? exc : 0;
+  // Regra única para todos os dias (semana, sábado, domingo e feriado): as primeiras `lim` min de extra vão para o banco;
+  // todo o excedente é extra paga, sempre a 100% (decisão do Rafael, 17/11/2026).
+  const banco = saldo > 0 ? Math.min(saldo, lim) : saldo, paga = saldo > 0 ? saldo - banco : 0;
   const st = U(uid).status[k];
   // Hora extra do dia (saldo positivo depois da tolerância) pede um motivo do colaborador
   const extra = counts && saldo > 0, just = U(uid).just[k]?.motivo || '';
-  return {ps, worked, live:liveW, exp, saldo, banco, paga, paga100, dom100, counts, open, autoInt, type:st?.tipo || 'normal', obs:st?.obs || '', extra, just,
+  return {ps, worked, live:liveW, exp, saldo, banco, paga, counts, open, autoInt, type:st?.tipo || 'normal', obs:st?.obs || '', extra, just,
     edited:ps.some(p => p.origem !== 'app' || p.hora_original), noGps:ps.filter(p => p.origem === 'app' && p.lat == null).length};
 }
 function extrasPendentes(uid){
@@ -593,9 +591,9 @@ function extrasPendentes(uid){
   return out;
 }
 function sumRange(uid, from, to){
-  const r = {w:0, e:0, s:0, b:0, pg:0, p100:0, odd:[], faltas:0}; const tk = todayKey();
+  const r = {w:0, e:0, s:0, b:0, pg:0, odd:[], faltas:0}; const tk = todayKey();
   if (!from || !to || from > to) return r;
-  eachDay(from, to, k => { const c = calc(uid, k); if (c.counts){ r.w += c.worked; r.e += c.exp; r.s += c.saldo; r.b += c.banco; r.pg += c.paga; r.p100 += c.paga100; if (c.exp > 0 && !c.ps.length && c.type === 'normal') r.faltas++; } if (c.open && k < tk) r.odd.push(k); });
+  eachDay(from, to, k => { const c = calc(uid, k); if (c.counts){ r.w += c.worked; r.e += c.exp; r.s += c.saldo; r.b += c.banco; r.pg += c.paga; if (c.exp > 0 && !c.ps.length && c.type === 'normal') r.faltas++; } if (c.open && k < tk) r.odd.push(k); });
   return r;
 }
 function localOf(p){
@@ -769,7 +767,7 @@ function renderToday(){
   $('h-acc').textContent = fmtSaldo(ab); $('h-acc').className = 'big num ' + cls(ab);
   $('h-lanc').hidden = !lancDe(uid, null, tk).length;
   $('h-lanc').innerHTML = `Inclui lançamentos manuais do gestor: <b class="num">${fmtSaldo(lt)}</b> (detalhes no Histórico).`;
-  $('h-paga').textContent = fmtDur(m.pg + m.p100); $('h-p100').textContent = fmtDur(m.p100);
+  $('h-paga').textContent = fmtDur(m.pg);
   $('h-regra').textContent = `(o que passa de ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra por dia)`;
   $('h-since').textContent = fmtDate(ini);
   const pe = $('h-pending');
@@ -872,7 +870,7 @@ async function renderHist(){
   const keys = []; eachDay(first, last, k => { if (k <= tk || U(uid).punches[k] || U(uid).status[k]) keys.push(k); });
   keys.reverse();
   const sm = sumRange(uid, first, last < tk ? last : tk);
-  $('s-worked').textContent = fmtDur(sm.w); $('s-paga').textContent = fmtDur(sm.pg + sm.p100); $('s-p100').textContent = sm.p100 ? `${fmtDur(sm.p100)} em dom./feriado (100%)` : '';
+  $('s-worked').textContent = fmtDur(sm.w); $('s-paga').textContent = fmtDur(sm.pg);
   const smb = sm.b + lancSum(uid, first, last < tk ? last : tk);
   $('s-mes').innerHTML = `No mês: <b class="${cls(smb)}">${fmtSaldo(smb)}</b>`;
   setAcumulado(uid);
@@ -886,8 +884,7 @@ async function renderHist(){
     if (c.open && k < tk) tags.push('<span class="tag">ímpar</span>');
     if (c.noGps) tags.push('<span class="tag info">sem GPS</span>');
     if (c.autoInt) tags.push(`<span class="tag info">−${fmtDur(c.autoInt)} intervalo</span>`);
-    if (c.paga) tags.push(`<span class="tag type">${fmtDur(c.paga)} paga</span>`);
-    if (c.paga100) tags.push(`<span class="tag type">${fmtDur(c.paga100)} a 100%</span>`);
+    if (c.paga) tags.push(`<span class="tag type">${fmtDur(c.paga)} paga 100%</span>`);
     if (c.extra && !c.just) tags.push('<span class="tag">extra sem motivo</span>');
     const pend = reqs.filter(r => r.dia === k && r.status === 'pendente').length;
     if (pend) tags.push(`<span class="tag">${pend} pendente${pend > 1 ? 's' : ''}</span>`);
@@ -923,7 +920,7 @@ async function renderMeses(uid){
     const acum = sumRange(uid, ini, z).b + lancSum(uid, null, z);
     const [y, mm] = m.split('-').map(Number);
     return `<li class="li" style="cursor:default"><div><div class="main" style="text-transform:capitalize">${MES[mm - 1]} ${y}${m === tk.slice(0, 7) ? ' <span class="tag info">em andamento</span>' : ''}</div>
-      <div class="sub">Extras pagas <b class="num">${fmtDur(r.pg + r.p100)}</b>${r.p100 ? ` (${fmtDur(r.p100)} em dom./feriado)` : ''} · Banco no mês <b class="num ${cls(bm)}">${fmtSaldo(bm)}</b></div></div>
+      <div class="sub">Extras pagas <b class="num">${fmtDur(r.pg)}</b> · Banco no mês <b class="num ${cls(bm)}">${fmtSaldo(bm)}</b></div></div>
       <div class="side"><div class="note" style="font-weight:700">acumulado</div><div class="num ${cls(acum)}">${fmtSaldo(acum)}</div></div></li>`;
   }).join('');
 }
@@ -1031,7 +1028,7 @@ function renderSheet(){
   $('sheet').innerHTML = `<div class="grab"></div>
     <div class="row-between"><div><h2 style="margin:0;text-transform:capitalize">${WDL[d.getDay()]}, ${fmtDate(k)}</h2>${uid !== S.me.id ? `<div class="note">${esc(nameOf(uid))}</div>` : ''}</div><button class="link" data-act="close">Fechar</button></div>
     ${ini && k < ini ? `<div class="banner" style="margin:10px 0 0">Data anterior ao início do controle (${fmtDate(ini)}): não entra no banco de horas.</div>` : ''}
-    <div class="note" style="margin-top:8px">${c.type !== 'normal' ? `<span class="tag type" style="margin-left:0">${esc(TYPES[c.type])}</span> ` : hol ? `<span class="tag type" style="margin-left:0">Feriado: ${esc(hol)}</span> ` : ''}${c.obs ? 'Obs.: ' + esc(c.obs) + ' · ' : ''}Trabalhado ${fmtDur(c.worked)}${c.autoInt ? ` (já descontado ${fmtDur(c.autoInt)} de intervalo)` : ''} · Previsto ${fmtDur(c.exp)}${c.counts ? ` · Saldo <b class="${cls(c.saldo)}">${fmtSaldo(c.saldo)}</b>${c.paga ? ` (banco ${fmtSaldo(c.banco)} + ${fmtDur(c.paga)} paga)` : ''}${c.paga100 ? ' (tudo extra a 100%: domingo/feriado)' : ''}` : ''}</div>
+    <div class="note" style="margin-top:8px">${c.type !== 'normal' ? `<span class="tag type" style="margin-left:0">${esc(TYPES[c.type])}</span> ` : hol ? `<span class="tag type" style="margin-left:0">Feriado: ${esc(hol)}</span> ` : ''}${c.obs ? 'Obs.: ' + esc(c.obs) + ' · ' : ''}Trabalhado ${fmtDur(c.worked)}${c.autoInt ? ` (já descontado ${fmtDur(c.autoInt)} de intervalo)` : ''} · Previsto ${fmtDur(c.exp)}${c.counts ? ` · Saldo <b class="${cls(c.saldo)}">${fmtSaldo(c.saldo)}</b>${c.paga ? ` (banco ${fmtSaldo(c.banco)} + ${fmtDur(c.paga)} paga a 100%)` : ''}` : ''}</div>
     ${c.extra ? `<div class="${c.just ? 'banner info' : 'banner'}" style="margin:10px 0 0">${c.just ? `<b>Motivo da hora extra:</b> ${esc(c.just)}` : '<b>Hora extra sem justificativa.</b>'}
       ${canAdj ? `<br><button class="link" data-act="justificar" style="padding:4px 0 0">${c.just ? 'Alterar motivo' : 'Informar o motivo'}</button>` : ''}</div>` : ''}
     <h3>Marcações</h3>
@@ -1161,7 +1158,7 @@ function reportUids(){
   return v === 'todos' ? S.team.filter(p => p.ativo || p.id === S.me.id).map(p => p.id) : [v || S.me.id];
 }
 function buildReport(uid, from, to){
-  const tk = todayKey(), rows = []; let w = 0, e = 0, s = 0, b = 0, pg = 0, p100 = 0, adj = 0, nogps = 0, faltas = 0, semJust = 0;
+  const tk = todayKey(), rows = []; let w = 0, e = 0, s = 0, b = 0, pg = 0, adj = 0, nogps = 0, faltas = 0, semJust = 0;
   eachDay(from, to, k => {
     const c = calc(uid, k), d = dateOf(k), ps = c.ps, future = k > tk, hol = holiday(k, uid);
     const main = ps.length === 2 ? [ps[0], null, null, ps[1]] : [0,1,2,3].map(i => ps[i] || null), ex = ps.slice(4), extras = [];
@@ -1174,13 +1171,13 @@ function buildReport(uid, from, to){
     if (c.obs) obs.push(c.obs);
     if (c.extra){ if (c.just) obs.push(`Motivo da extra: ${c.just}`); else { obs.push('EXTRA SEM JUSTIFICATIVA'); semJust++; } }
     lancDe(uid, k, k).forEach(l => obs.push(`Lançamento no banco ${fmtSaldo(l.minutos)} (${l.motivo})`));
-    if (c.counts){ w += c.worked; e += c.exp; s += c.saldo; b += c.banco; pg += c.paga; p100 += c.paga100; }
+    if (c.counts){ w += c.worked; e += c.exp; s += c.saldo; b += c.banco; pg += c.paga; }
     adj += ps.filter(p => p.origem !== 'app' || p.hora_original).length; nogps += c.noGps;
     const locs = [...new Set(ps.map(localOf))];
     rows.push({k, wd:WD[d.getDay()], main, extras:extras.join(' '), worked:ps.length ? c.worked : null, exp:c.counts ? c.exp : null,
-      saldo:c.counts ? c.saldo : null, banco:c.counts ? c.banco : null, paga:c.counts ? c.paga : null, paga100:c.counts ? c.paga100 : null, obs:obs.join(' · '), locs:locs.join(' / '), edited:c.edited, off:c.exp === 0, ps, semJust:c.extra && !c.just});
+      saldo:c.counts ? c.saldo : null, banco:c.counts ? c.banco : null, paga:c.counts ? c.paga : null, obs:obs.join(' · '), locs:locs.join(' / '), edited:c.edited, off:c.exp === 0, ps, semJust:c.extra && !c.just});
   });
-  return {uid, from, to, rows, w, e, s, b, pg, p100, adj, nogps, faltas, semJust, ex:extrato(uid, from, to)};
+  return {uid, from, to, rows, w, e, s, b, pg, adj, nogps, faltas, semJust, ex:extrato(uid, from, to)};
 }
 let repToken = 0;
 async function renderReport(){
@@ -1195,8 +1192,8 @@ async function renderReport(){
   try { for (const uid of uids) await ensureReport(uid, P); } catch (e){ $('r-info').textContent = errMsg(e); return; }
   if (my !== repToken) return;
   const Rs = uids.map(uid => buildReport(uid, P.from, P.to));
-  const tot = Rs.reduce((a, r) => ({w:a.w + r.w, b:a.b + r.b + r.ex.lanc, pg:a.pg + r.pg, p100:a.p100 + r.p100, adj:a.adj + r.adj, ng:a.ng + r.nogps, f:a.f + r.faltas}), {w:0, b:0, pg:0, p100:0, adj:0, ng:0, f:0});
-  $('r-worked').textContent = fmtDur(tot.w); $('r-paga').textContent = fmtDur(tot.pg + tot.p100); $('r-p100').textContent = tot.p100 ? `${fmtDur(tot.p100)} em dom./feriado (100%)` : '';
+  const tot = Rs.reduce((a, r) => ({w:a.w + r.w, b:a.b + r.b + r.ex.lanc, pg:a.pg + r.pg, adj:a.adj + r.adj, ng:a.ng + r.nogps, f:a.f + r.faltas}), {w:0, b:0, pg:0, adj:0, ng:0, f:0});
+  $('r-worked').textContent = fmtDur(tot.w); $('r-paga').textContent = fmtDur(tot.pg);
   $('r-saldo').textContent = fmtSaldo(tot.b); $('r-saldo').className = 'v num ' + cls(tot.b);
   $('r-info').textContent = `${fmtDate(P.from)} a ${fmtDate(P.to)} · ${uids.length > 1 ? uids.length + ' pessoas · ' : ''}${tot.f} falta(s) · ${tot.adj} marcação(ões) ajustada(s) · ${tot.ng} sem GPS. ${Rs.length === 1 ? `Banco: saldo anterior ${fmtSaldo(Rs[0].ex.ant)}, saldo final ${fmtSaldo(Rs[0].ex.fim)}. ` : ''}O Excel inclui o espelho, todas as marcações com coordenadas e o histórico de ajustes.`;
 }
@@ -1234,24 +1231,24 @@ async function exportXlsx(btn){
     const fmtCells = (ws, r0, r1, cols, z) => { for (let r = r0; r <= r1; r++) cols.forEach(c => { const a = X.utils.encode_cell({r, c}); if (ws[a] && ws[a].t === 'n') ws[a].z = z; }); };
     if (Rs.length > 1){
       const aoa = [['Resumo da equipe'], ['Empresa', S.cfg.empresa || ''], ['Período', `${fmtDate(P.from)} a ${fmtDate(P.to)}`], ['Gerado em', new Date().toLocaleString('pt-BR')], [],
-        ['Nome','Matrícula','Trabalhado','Previsto','Banco dos dias','Banco dos dias (min)','Extras pagas','Extras pagas (min)','Extras 100%','Extras 100% (min)','Faltas','Marcações ajustadas','Marcações sem GPS','Saldo anterior','Lançamentos manuais','Saldo final do banco','Saldo final (min)','Extras sem justificativa']];
-      Rs.forEach(R => { const p = profOf(R.uid); aoa.push([p.nome, p.matricula || '', R.w/1440, R.e/1440, fmtSaldo(R.b), R.b, R.pg/1440, R.pg, R.p100/1440, R.p100, R.faltas, R.adj, R.nogps, fmtSaldo(R.ex.ant), fmtSaldo(R.ex.lanc), fmtSaldo(R.ex.fim), R.ex.fim, R.semJust]); });
-      const ws = X.utils.aoa_to_sheet(aoa); fmtCells(ws, 6, aoa.length - 1, [2, 3, 6, 8], '[h]:mm');
-      ws['!cols'] = [{wch:30},{wch:12},{wch:11},{wch:10},{wch:14},{wch:11},{wch:12},{wch:17},{wch:12},{wch:17},{wch:7},{wch:18},{wch:17},{wch:14},{wch:19},{wch:19},{wch:16},{wch:22}];
+        ['Nome','Matrícula','Trabalhado','Previsto','Banco dos dias','Banco dos dias (min)','Extras pagas (100%)','Extras pagas (min)','Faltas','Marcações ajustadas','Marcações sem GPS','Saldo anterior','Lançamentos manuais','Saldo final do banco','Saldo final (min)','Extras sem justificativa']];
+      Rs.forEach(R => { const p = profOf(R.uid); aoa.push([p.nome, p.matricula || '', R.w/1440, R.e/1440, fmtSaldo(R.b), R.b, R.pg/1440, R.pg, R.faltas, R.adj, R.nogps, fmtSaldo(R.ex.ant), fmtSaldo(R.ex.lanc), fmtSaldo(R.ex.fim), R.ex.fim, R.semJust]); });
+      const ws = X.utils.aoa_to_sheet(aoa); fmtCells(ws, 6, aoa.length - 1, [2, 3, 6], '[h]:mm');
+      ws['!cols'] = [{wch:30},{wch:12},{wch:11},{wch:10},{wch:14},{wch:11},{wch:19},{wch:17},{wch:7},{wch:18},{wch:17},{wch:14},{wch:19},{wch:19},{wch:16},{wch:22}];
       X.utils.book_append_sheet(wb, ws, sheetName('Resumo'));
     }
     Rs.forEach(R => {
       const p = profOf(R.uid);
       const aoa = [['Espelho de ponto'], ['Nome', p.nome], ['Matrícula', p.matricula || ''], ['Empresa', S.cfg.empresa || ''],
         ['Período', `${fmtDate(R.from)} a ${fmtDate(R.to)}`], ['Tolerância diária (min)', Number(S.cfg.tolerancia) || 0], ['Intervalo mínimo (min)', Number(S.cfg.intervalo_min ?? 60)], ['Limite diário para o banco (min)', Number(S.cfg.limite_banco_dia ?? 120)], ['Gerado em', new Date().toLocaleString('pt-BR')], [],
-        ['Data','Dia','Entrada','Saída intervalo','Retorno intervalo','Saída','Extras','Trabalhado','Previsto','Saldo do dia','Banco','Banco (min)','Extras pagas','Extras 100%','Ajuste','Local','Observações']];
+        ['Data','Dia','Entrada','Saída intervalo','Retorno intervalo','Saída','Extras','Trabalhado','Previsto','Saldo do dia','Banco','Banco (min)','Extras pagas (100%)','Ajuste','Local','Observações']];
       const r0 = aoa.length;
       R.rows.forEach(r => aoa.push([fmtDate(r.k), r.wd, ...r.main.map(x => x ? toMin(x.t)/1440 : null), r.extras,
         r.worked != null ? r.worked/1440 : null, r.exp != null ? r.exp/1440 : null, r.saldo != null ? fmtSaldo(r.saldo) : '',
-        r.banco != null ? fmtSaldo(r.banco) : '', r.banco != null ? r.banco : null, r.paga ? r.paga/1440 : null, r.paga100 ? r.paga100/1440 : null,
+        r.banco != null ? fmtSaldo(r.banco) : '', r.banco != null ? r.banco : null, r.paga ? r.paga/1440 : null,
         r.edited ? 'Sim' : '', r.locs, r.obs]));
       aoa.push([]); const rt = aoa.length;
-      aoa.push(['Totais', '', null, null, null, null, '', R.w/1440, R.e/1440, fmtSaldo(R.s), fmtSaldo(R.b), R.b, R.pg/1440, R.p100/1440, '', '', '']);
+      aoa.push(['Totais', '', null, null, null, null, '', R.w/1440, R.e/1440, fmtSaldo(R.s), fmtSaldo(R.b), R.b, R.pg/1440, '', '', '']);
       aoa.push([]);
       aoa.push(['Banco de horas']);
       aoa.push(['Saldo anterior', fmtSaldo(R.ex.ant), R.ex.ant]);
@@ -1260,8 +1257,8 @@ async function exportXlsx(btn){
       aoa.push(['Saldo final do banco', fmtSaldo(R.ex.fim), R.ex.fim]);
       aoa.push(['Dias com extra sem justificativa', R.semJust]);
       const ws = X.utils.aoa_to_sheet(aoa);
-      fmtCells(ws, r0, rt, [2, 3, 4, 5], 'hh:mm'); fmtCells(ws, r0, rt, [7, 8, 12, 13], '[h]:mm');
-      ws['!cols'] = [{wch:11},{wch:5},{wch:9},{wch:14},{wch:16},{wch:9},{wch:14},{wch:11},{wch:10},{wch:11},{wch:9},{wch:11},{wch:12},{wch:11},{wch:7},{wch:28},{wch:36}];
+      fmtCells(ws, r0, rt, [2, 3, 4, 5], 'hh:mm'); fmtCells(ws, r0, rt, [7, 8, 12], '[h]:mm');
+      ws['!cols'] = [{wch:11},{wch:5},{wch:9},{wch:14},{wch:16},{wch:9},{wch:14},{wch:11},{wch:10},{wch:11},{wch:9},{wch:11},{wch:19},{wch:7},{wch:28},{wch:36}];
       X.utils.book_append_sheet(wb, ws, sheetName(Rs.length > 1 ? p.nome : 'Espelho'));
     });
     const ma = [['Nome','Data','Hora','Marcação','Origem','Hora original','Local','Latitude','Longitude','Precisão (m)','Mapa']];
@@ -1305,18 +1302,18 @@ async function exportPdf(btn){
       doc.setTextColor(30);
       doc.text(clean(`Nome: ${p.nome}     Matrícula: ${p.matricula || '-'}     Empresa: ${S.cfg.empresa || '-'}`), 10, 21);
       const body = R.rows.map(r => [fmtDM(r.k), r.wd, ...r.main.map(x => x ? x.t + (x.origem !== 'app' || x.hora_original ? '*' : '') : ''), r.extras,
-        r.worked != null ? fmtDur(r.worked) : '', r.exp != null ? fmtDur(r.exp) : '', r.banco != null ? fmtSaldo(r.banco) : '', r.paga ? fmtDur(r.paga) : '', r.paga100 ? fmtDur(r.paga100) : '', clean(r.locs), clean(r.obs)]);
+        r.worked != null ? fmtDur(r.worked) : '', r.exp != null ? fmtDur(r.exp) : '', r.banco != null ? fmtSaldo(r.banco) : '', r.paga ? fmtDur(r.paga) : '', clean(r.locs), clean(r.obs)]);
       doc.autoTable({
         startY:25, theme:'grid', margin:{left:10, right:10, bottom:14}, showFoot:'lastPage',
-        head:[['Data','Dia','Entrada','Saída int.','Retorno','Saída','Extras','Trab.','Prev.','Banco','Ext. paga','Ext. 100%','Local','Observações']],
-        body, foot:[['Totais','','','','','','', fmtDur(R.w), fmtDur(R.e), fmtSaldo(R.b), fmtDur(R.pg), fmtDur(R.p100), '', '']],
+        head:[['Data','Dia','Entrada','Saída int.','Retorno','Saída','Extras','Trab.','Prev.','Banco','Ext. paga 100%','Local','Observações']],
+        body, foot:[['Totais','','','','','','', fmtDur(R.w), fmtDur(R.e), fmtSaldo(R.b), fmtDur(R.pg), '', '']],
         styles:{font:'helvetica', fontSize:7.4, cellPadding:1.1, halign:'center', valign:'middle', lineColor:[220,216,206], lineWidth:0.15, textColor:[30,30,30]},
         headStyles:{fillColor:[20,83,45], textColor:255, fontStyle:'bold'},
         footStyles:{fillColor:[238,235,226], textColor:[20,20,20], fontStyle:'bold'},
-        columnStyles:{12:{halign:'left', cellWidth:44}, 13:{halign:'left', cellWidth:50}},
+        columnStyles:{11:{halign:'left', cellWidth:46}, 12:{halign:'left', cellWidth:56}},
         didParseCell:h => {
           if (h.section === 'body'){ const r = R.rows[h.row.index]; if (r.off) h.cell.styles.fillColor = [246,244,238]; if (h.column.index === 9 && r.banco) h.cell.styles.textColor = r.banco < 0 ? RED : GREEN;
-            if (h.column.index === 13 && r.semJust){ h.cell.styles.textColor = [180,83,9]; h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [253,240,220]; } }
+            if (h.column.index === 12 && r.semJust){ h.cell.styles.textColor = [180,83,9]; h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [253,240,220]; } }
           if (h.section === 'foot' && h.column.index === 9 && R.b) h.cell.styles.textColor = R.b < 0 ? RED : GREEN;
         }
       });
@@ -1326,7 +1323,7 @@ async function exportPdf(btn){
       doc.text(`Banco de horas: saldo anterior ${fmtSaldo(R.ex.ant)}  +  dias do período ${fmtSaldo(R.ex.dias)}  +  lançamentos manuais ${fmtSaldo(R.ex.lanc)}  =  saldo final ${fmtSaldo(R.ex.fim)}`, 10, y);
       doc.setFont('helvetica', 'normal'); y += 6;
       doc.setFontSize(7.8); doc.setTextColor(90);
-      const rodape = `* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Extras sem justificativa: ${R.semJust}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min. Intervalo mínimo: ${Number(S.cfg.intervalo_min ?? 60)} min. Em qualquer dia, até ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra vão para o banco e o excedente é pago (em domingo/feriado, a 100%).`;
+      const rodape = `* Marcação incluída ou ajustada (${R.adj} no período). Faltas: ${R.faltas}. Extras sem justificativa: ${R.semJust}. Marcações sem GPS: ${R.nogps}. Tolerância diária: ${Number(S.cfg.tolerancia) || 0} min. Intervalo mínimo: ${Number(S.cfg.intervalo_min ?? 60)} min. Em qualquer dia, até ${fmtDur(Number(S.cfg.limite_banco_dia ?? 120))} de extra vão para o banco e o excedente é pago como extra a 100%.`;
       const nota = doc.splitTextToSize(rodape, W - 20);
       doc.text(nota, 10, y); y += (nota.length - 1) * 3.4;
       doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')} - controle de jornada da equipe. Coordenadas de cada marcação no relatório Excel.`, 10, y + 4.2);
