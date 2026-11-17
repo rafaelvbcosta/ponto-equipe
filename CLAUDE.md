@@ -38,7 +38,7 @@ Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele
 ## Regras de cálculo (todas no front, função `calc()` do `index.html`)
 
 - Jornada por dia da semana em minutos (`profiles.jornada`, índice 0 = domingo). Padrão 8h seg–sex.
-- **Intervalo mínimo** (`config.intervalo_min`, 60): dia com mais de 6h trabalhadas sem intervalo marcado (ou com intervalo menor) tem a diferença descontada, sem deixar o dia abaixo de 6h.
+- **Intervalo mínimo / almoço** (`config.intervalo_min`, 60; constante `ALMOCO` = 13:00 no front): se o expediente **atravessa as 13:00** (1ª marcação antes, última depois), desconta sempre o intervalo não marcado (ou a diferença até o mínimo) — regra do Rafael, 17/11/2026. Nos demais dias, só desconta se o dia passar de 6h, sem deixar abaixo de 6h (CLT art. 71). A saída prevista (lembretes, Conta) soma o intervalo quando a jornada passa de 6h ou atravessa as 13:00.
 - **Tolerância** (`config.tolerancia`, 10 min): diferença diária de até X min vira zero.
 - **Banco x extra paga** (`config.limite_banco_dia`, 120) — regra única definida pelo Rafael (13/11/2026): em **qualquer dia** (semana, sábado, domingo, feriado), as 2 primeiras horas extras do dia vão para o banco e o excedente é "extra paga". Saldo negativo (falta/atraso) desconta do banco.
 - **Toda extra paga é a 100%** (decisão do Rafael, 17/11/2026): não há mais separação "extra paga" x "extra 100%" (o antigo `paga100`/`dom100` foi removido). Relatórios têm uma coluna só, "Extras pagas (100%)".
