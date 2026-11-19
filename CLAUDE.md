@@ -26,7 +26,7 @@ Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele
 
 ## Lembretes de marcação (push)
 
-- `profiles.entrada` (int[7], minutos, índice 0 = domingo, padrão 08:00): horário de entrada definido pelo gestor. Saída prevista = entrada + jornada + `config.intervalo_min` (só se a jornada passa de 6h).
+- `profiles.entrada` (int[7], minutos, índice 0 = domingo, padrão 08:00): horário de entrada definido pelo gestor. Saída prevista = entrada + jornada + intervalo pré-assinalado (jornada > 6h: `config.intervalo_min`; > 4h: 15 min).
 - `config.lembretes` (liga/desliga geral) e `config.lembrete_min` (envia X min depois do horário, padrão 5; janela de 1h).
 - Cada aparelho ativa em Conta → `push_salvar` grava em `push_subscriptions` (endpoint só de serviços conhecidos: FCM, Mozilla, Windows, Apple; até 5 por pessoa). Sair do app chama `push_remover`; inativar o usuário apaga as inscrições.
 - pg_cron `ponto-lembretes` (a cada minuto) roda `_lembretes_tick()`: se `_lembretes_candidatos()` tiver alguém, chama a Edge Function `lembretes` (`acao: enviar`, cabeçalho `x-cron-token` = segredo `lembretes_cron_token` do Vault). A função reserva com `_lembretes_reservar()` (tabela `lembretes_enviados`, uma vez por pessoa/dia/tipo) e envia o push. Inscrição que responde 404/410 é apagada.
@@ -38,7 +38,7 @@ Na mesma org do Supabase existe o projeto `buscaqui` (outro app). Não mexa nele
 ## Regras de cálculo (todas no front, função `calc()` do `index.html`)
 
 - Jornada por dia da semana em minutos (`profiles.jornada`, índice 0 = domingo). Padrão 8h seg–sex.
-- **Intervalo mínimo / almoço** (`config.intervalo_min`, 60; constante `ALMOCO` = 13:00 no front): se o expediente **atravessa as 13:00** (1ª marcação antes, última depois), desconta sempre o intervalo não marcado (ou a diferença até o mínimo) — regra do Rafael, 17/11/2026. Nos demais dias, só desconta se o dia passar de 6h, sem deixar abaixo de 6h (CLT art. 71). A saída prevista (lembretes, Conta) soma o intervalo quando a jornada passa de 6h ou atravessa as 13:00.
+- **Intervalo pré-assinalado** (CLT art. 71 e 74 §2º; Opção 1 escolhida pelo Rafael em 19/11/2026, substitui a regra das 13:00): a equipe marca só entrada e saída. Se o intervalo não foi marcado (ou foi menor), desconta o que falta pela **duração** do trabalho bruto, sem olhar horário: até 4h nada; mais de 4h até 6h `INTERVALO_CURTO` (15 min); mais de 6h `config.intervalo_min` (60), com transição gradual (6h00→5h45, 6h15→6h00, 7h00→6h00, 8h00→7h00; nunca há degrau). Quem faz intervalo maior que o padrão deve marcá-lo. Saída prevista (lembretes, Conta) = entrada + jornada + (jornada > 6h: intervalo mínimo; > 4h: 15 min).
 - **Tolerância** (`config.tolerancia`, 10 min): diferença diária de até X min vira zero.
 - **Banco x extra paga** (`config.limite_banco_dia`, 120) — regra única definida pelo Rafael (13/11/2026): em **qualquer dia** (semana, sábado, domingo, feriado), as 2 primeiras horas extras do dia vão para o banco e o excedente é "extra paga". Saldo negativo (falta/atraso) desconta do banco.
 - **Toda extra paga é a 100%** (decisão do Rafael, 17/11/2026): não há mais separação "extra paga" x "extra 100%" (o antigo `paga100`/`dom100` foi removido). Relatórios têm uma coluna só, "Extras pagas (100%)".

@@ -354,7 +354,7 @@ details ul{margin:8px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);
       <div><label class="f" for="cfg-int">Intervalo mínimo (min)</label><input id="cfg-int" type="number" min="0" max="240" inputmode="numeric"></div></div>
       <label class="f" for="cfg-lim">Máximo diário de horas extras para o banco (min)</label><input id="cfg-lim" type="number" min="0" max="720" inputmode="numeric">
       <div class="note" style="margin-top:6px">Exemplo: 120 = as 2 primeiras horas extras do dia vão para o banco e o restante é pago como extra a 100%, em qualquer dia (semana, sábado, domingo ou feriado). Faltas e atrasos sempre descontam do banco.</div>
-      <div class="note" style="margin-top:6px">Almoço: se o expediente passa das 13:00 e o intervalo não foi marcado (ou foi menor que o mínimo), a diferença é descontada sempre. Em turnos que não passam pelas 13:00, só se o dia tiver mais de 6h (CLT art. 71). Use 0 para desligar.</div>
+      <div class="note" style="margin-top:6px">Intervalo pré-assinalado (CLT art. 71 e 74): quem não marcar o intervalo tem descontado, pelo tempo trabalhado, 15 min (mais de 4h até 6h) ou o intervalo mínimo acima (mais de 6h), com transição gradual entre as faixas. Quem fizer intervalo maior que o padrão deve marcá-lo. Use 0 para desligar.</div>
       <label class="chk"><input type="checkbox" id="cfg-fer"> Considerar feriados nacionais automaticamente</label>
       <label class="chk"><input type="checkbox" id="cfg-gps"> Exigir localização para registrar o ponto</label>
       <label class="chk"><input type="checkbox" id="cfg-lemb"> Enviar lembretes de marcação no início e no fim do horário</label>
@@ -444,7 +444,7 @@ const monthEnd = m => { const [y, mm] = m.split('-').map(Number); return keyOf(n
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const validT = t => /^\d{2}:\d{2}$/.test(t || '');
 // Marcações alternam entrada/saída (a equipe marca só entrada e saída; o intervalo mínimo é descontado no cálculo)
-const ALMOCO = 13 * 60; // expediente que passa das 13:00 sempre tem 1h de almoço descontada (se não marcada)
+const INTERVALO_CURTO = 15; // CLT art. 71 §1º: trabalho de mais de 4h até 6h tem intervalo de 15 min
 const labelFor = i => i % 2 === 0 ? 'Entrada' : 'Saída';
 function eachDay(from, to, fn){ for (let k = from; k <= to; k = addDays(k, 1)) fn(k); }
 function monthsBetween(a, b){ const out = []; let [y, m] = a.slice(0, 7).split('-').map(Number); const end = b.slice(0, 7); for (;;){ const s = `${y}-${pad(m)}`; out.push(s); if (s >= end) break; m++; if (m > 12){ m = 1; y++; } } return out; }
@@ -561,23 +561,24 @@ function calc(uid, k, live){
   const open = ps.length % 2 === 1;
   let liveW = worked;
   if (live && open && k === tk){ const a = toMin(ps[ps.length-1].t), n = nowMin(); if (n >= a) liveW += n - a; }
-  // Intervalo (almoço) sem marcação, ou marcado menor que config.intervalo_min, tem a diferença descontada:
-  //  - expediente que atravessa as 13:00 (entrada antes, saída depois): sempre desconta (regra do Rafael, 17/11/2026);
-  //  - demais dias: só se o dia passar de 6h, sem deixar o dia abaixo de 6h (CLT art. 71).
+  // Intervalo pré-assinalado (CLT art. 74 §2º), pela duração do trabalho (art. 71), sem depender do horário — decisão do
+  // Rafael, 19/11/2026. Se o intervalo não foi marcado (ou foi marcado menor), desconta o que falta para o mínimo:
+  //   até 4h: nada · mais de 4h até 6h: 15 min · mais de 6h: config.intervalo_min (1h).
+  // Com transição gradual entre as faixas, para não haver "degrau" (trabalhar mais nunca conta menos).
   const minI = Math.max(0, Number(S.cfg.intervalo_min ?? 60) || 0);
-  const autoI = (w, gap, ini, fim) => {
-    if (!minI || gap >= minI) return 0;
-    if (ini < ALMOCO && fim > ALMOCO) return Math.min(minI - gap, w);
-    return w > 360 ? Math.min(minI - gap, w - 360) : 0;
+  const autoI = (w, gap) => {
+    if (!minI || w <= 240) return 0;
+    const req = w <= 360 ? Math.min(INTERVALO_CURTO, w - 240) : Math.max(Math.min(minI, w - 360), Math.min(INTERVALO_CURTO, minI));
+    return Math.max(0, req - gap);
   };
   let autoInt = 0;
   if (ps.length >= 2 && !open){
     const a = toMin(ps[0].t); let b = toMin(ps[ps.length-1].t); if (b < a) b += 1440;
-    autoInt = autoI(worked, Math.max(0, b - a - worked), a, b); worked -= autoInt;
+    autoInt = autoI(worked, Math.max(0, b - a - worked)); worked -= autoInt;
   }
   if (live && k === tk && ps.length){
     const a = toMin(ps[0].t); let b = open ? nowMin() : toMin(ps[ps.length-1].t); if (b < a) b += 1440;
-    liveW -= open ? autoI(liveW, Math.max(0, b - a - liveW), a, b) : autoInt;
+    liveW -= open ? autoI(liveW, Math.max(0, b - a - liveW)) : autoInt;
   }
   const exp = expectedFor(uid, k), ini = profOf(uid)?.inicio || tk;
   let counts = k >= ini && k <= tk;
@@ -1380,7 +1381,7 @@ function openUser(id){
     <div class="grid2"><div><label class="f" for="u-ini">Início do controle</label><input id="u-ini" type="date" value="${esc(p.inicio)}"></div>
       <div><label class="f" for="u-fuso">Fuso horário</label><select id="u-fuso">${Object.entries(FUSOS).map(([v, l]) => `<option value="${v}"${p.fuso === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div></div>
     <label class="f">Horário por dia (jornada 00:00 = sem expediente)</label>${horarioInputs(p.jornada, p.entrada)}
-    <div class="note" style="margin-top:6px">A entrada é usada nos lembretes. Saída prevista = entrada + jornada + intervalo mínimo (quando o expediente passa das 13:00 ou a jornada passa de 6h).</div>
+    <div class="note" style="margin-top:6px">A entrada é usada nos lembretes. Saída prevista = entrada + jornada + intervalo (1h se a jornada passa de 6h; 15 min se passa de 4h).</div>
     ${id ? `<label class="chk"><input type="checkbox" id="u-ativo"${p.ativo ? ' checked' : ''}> Usuário ativo (pode entrar e marcar ponto)</label>`
          : `<label class="f" for="u-pass">Senha temporária</label><div style="display:flex;gap:8px"><input id="u-pass" value="${randomPass()}"><button class="btn sm" data-act="regen">Gerar</button></div>`}
     <button class="btn primary full" style="margin-top:14px" data-act="${id ? 'save-user' : 'create-user'}" data-id="${id || ''}">${id ? 'Salvar' : 'Criar conta'}</button>
@@ -1509,8 +1510,9 @@ const LEMB_DISP = 'ponto-equipe-lemb-dispensado';
 const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const standalone = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 const entradaDe = (e, i) => { const v = Number((e || [])[i]); return Number.isFinite(v) && v >= 0 && v < 1440 ? v : 480; };
-function saidaDe(p, i){ const j = Number(p.jornada?.[i]) || 0, e = entradaDe(p.entrada, i), almoco = j > 360 || (e < ALMOCO && e + j > ALMOCO);
-  return e + j + (almoco ? Math.max(0, Number(S.cfg.intervalo_min ?? 60) || 0) : 0); }
+// Saída prevista = entrada + jornada + intervalo pré-assinalado da jornada (mais de 6h: intervalo mínimo; mais de 4h: 15 min)
+function saidaDe(p, i){ const j = Number(p.jornada?.[i]) || 0, e = entradaDe(p.entrada, i), minI = Math.max(0, Number(S.cfg.intervalo_min ?? 60) || 0);
+  return e + j + (j > 360 ? minI : j > 240 ? Math.min(INTERVALO_CURTO, minI) : 0); }
 function horarioTxt(p){
   const dias = [1,2,3,4,5,6,0].filter(i => Number(p.jornada?.[i]) > 0);
   if (!dias.length) return 'Sem dias de trabalho cadastrados.';
